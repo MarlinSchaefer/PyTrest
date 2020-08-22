@@ -1,0 +1,2 @@
+class BaseDepot(object):
+    pass

@@ -1,0 +1,2 @@
+class BaseOrder(object):
+    pass

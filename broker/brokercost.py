@@ -1,0 +1,2 @@
+class BaseBrokerCost(object):
+    pass
