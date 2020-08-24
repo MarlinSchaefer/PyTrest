@@ -4,13 +4,13 @@ import warnings
 from PyTrest.currency import Money
 
 class Candle(object):
-    def __init__(self, data=None, currency=None):
+    def __init__(self, data=None, currency=None, timestamp=None):
         self.names = {'open': 'Open',
                       'close': 'Close',
                       'high': 'High',
                       'low': 'Low',
                       'volume': 'Volume'}
-        self.timestamp = None
+        self.timestamp = timestamp
         self.currency = currency
         self.data = data
     
@@ -110,6 +110,18 @@ class Candle(object):
             return Money(self.data.get(k, d),
                          currency=self.currency,
                          conversion_date=self.timestamp)
+    
+    def convert(self, currency):
+        data = {}
+        for key, val in self.data.items():
+            if isinstance(val, Money):
+                data[key] = val.convert(currency, date=self.timestamp)
+            else:
+                data[key] = val
+        ret = Candle(data=data, currency=currency,
+                     timestamp=self.timestamp)
+        ret.names = self.names
+        return ret
     
     #All math operations
     def __add__(self, other):

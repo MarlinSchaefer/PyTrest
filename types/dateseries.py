@@ -61,6 +61,12 @@ class DateSeries(object):
         self.head[1] = self.index[self.head[0]]
         return self.value
     
+    def next_date(self):
+        if self.head[0] >= len(self) - 1:
+            return self.head[1]
+        else:
+            return self.index[self.head[0] + 1]
+    
     def advance_head(self, timeindex, use_closest=False):
         posmsg = 'Can advance the read-head only in the positive '
         posmsg += 'direction.'
@@ -236,7 +242,7 @@ class DateSeries(object):
             return self.iloc(dateindex)
         elif isinstance(dateindex, str):
             dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
-        elif isinstance(dateindex, datetime.datetime):
+        if isinstance(dateindex, datetime.datetime):
             return self.loc(dateindex)
         raise TypeError('Unrecognized type.')
     
