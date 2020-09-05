@@ -2,6 +2,17 @@ import PyTrest.depot as dep
 import orderhistory as ordhist
 import brokercost as bk
 
+"""
+Broker commands
+-buy(candle_feed, amount, price=None)
+-sell(candle_feed, amount, price=None)
+-cancel(orderid, {more orderids})
+-buy_cancel(candle_feed, amount, price=None, orderids=None)
+-sell_cancel(candle_feed, amount, price=None, orderids=None)
+-adjust_amount(orderid, amount_diff)
+-
+"""
+
 class BaseBroker(object):
     def __init__(self, depots=None, active_depot=None, history=None, broker_cost=None):
         self.depots = depots
