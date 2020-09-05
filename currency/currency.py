@@ -4,9 +4,26 @@ import numpy as np
 
 class Money(object):
     def __init__(self, amount, currency='USD', conversion_date=None):
-        self.amount = amount
         self.currency = currency.upper()
         self.conversion_date = conversion_date
+        self.amount = amount
+    
+    @property
+    def amount(self):
+        return self._amount
+    
+    @amount.setter
+    def amount(self, amount):
+        if amount is None:
+            self._amount = 0.
+        elif isinstance(amount, (int, float)):
+            self._amount = float(amount)
+        elif isinstance(amount, type(self)):
+            self._amount = amount.amount
+            self.currency = amount.currency
+            self.conversion_date = amount.conversion_date
+        else:
+            raise TypeError
     
     def set_conversion_date(self, date):
         self.conversion_date = date
