@@ -4,12 +4,19 @@ import warnings
 from PyTrest.currency import Money
 
 class Candle(object):
-    def __init__(self, data=None, currency=None, timestamp=None):
-        self.names = {'open': 'Open',
-                      'close': 'Close',
-                      'high': 'High',
-                      'low': 'Low',
-                      'volume': 'Volume'}
+    def __init__(self, data=None, currency=None, timestamp=None,
+                 names=None):
+        if names is None:
+            self.names = {'open': 'Open',
+                        'close': 'Close',
+                        'high': 'High',
+                        'low': 'Low',
+                        'volume': 'Volume'}
+        else:
+            for key in ['open', 'close', 'high', 'low', 'volume']:
+                if key not in names:
+                    raise ValueError
+            self.names = names
         self.timestamp = timestamp
         self.currency = currency
         self.data = data
@@ -104,12 +111,12 @@ class Candle(object):
     vol = volume
     
     def get(self, k, d=None, as_currency=False):
-        if self.currency is None or not as_currency:
-            return self.data.get(k, d)
-        else:
-            return Money(self.data.get(k, d),
-                         currency=self.currency,
-                         conversion_date=self.timestamp)
+        if self.currency is not None and as_currency:
+            if k in list(self.names.values()) and not k == self.names['volume']:
+                return Money(self.data.get(k, d),
+                            currency=self.currency,
+                            conversion_date=self.timestamp)
+        return self.data.get(k, d)
     
     def convert(self, currency):
         data = {}
@@ -126,27 +133,21 @@ class Candle(object):
     #All math operations
     def __add__(self, other):
         if isinstance(other, (dict, type(self))):
-            keys = []
-            other_keys = list(other.keys())
-            for key in self.keys():
-                if not key in list(self.names.values()):
-                    if key in other_keys:
-                        keys.append(key)
+            assert list(other.keys()) == list(self.keys())
             data = {}
-            for key in keys:
+            for key in self.keys():
                 data[key] = self.get(key) + other.get(key)
-            if isinstance(other, dict):
-                data[self.names['open']] = (self.open + other[self.names['open']]).amount
-                data[self.names['close']] = (self.close + other[self.names['close']]).amount
-                data[self.names['high']] = (self.high + other[self.names['high']]).amount
-                data[self.names['low']] = (self.low + other[self.names['low']]).amount
-                data[self.names['volume']] = self.volume + other[self.names['volume']]
-            else:
-                data[self.names['open']] = (self.open + other.open).amount
-                data[self.names['close']] = (self.close + other.close).amount
-                data[self.names['high']] = (self.high + other.high).amount
-                data[self.names['low']] = (self.low + other.low).amount
-                data[self.names['volume']] = self.volume + other.volume
+            
             return Candle(data=data, currency=self.currency)
         else:
             raise TypeError()
+    
+    def __neg__(self):
+        data = {}
+        for key, val in self.data.items():
+            data[key] = -val
+        return self.__class__(data=data, currency=self.currency,
+                              timestamp=self.timestamp)
+    
+    def __sub__(self, other):
+        return self.__add__(-other)
