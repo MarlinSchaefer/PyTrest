@@ -27,6 +27,18 @@ class DateSeries(object):
     def value(self):
         return self.data[self.head[0]]
     
+    @property
+    def head_date(self):
+        return self.head[1]
+    
+    @property
+    def dateindex(self):
+        return self.head_date
+    
+    @property
+    def head_index(self):
+        return self.head[0]
+    
     def insert_value(self, dateindex, value=None):
         idx = np.searchsorted(np.array(self.index), dateindex)
         if self.index[idx] == dateindex:
@@ -274,3 +286,10 @@ class DateSeries(object):
                     return ret
                 else:
                     raise ValueError('Lengths do not match.')
+    
+    def __neg__(self):
+        data = [-dat for dat in self.data]
+        index = self.index
+        datetime_format = self.datetime_format
+        return DateSeries(data=data, index=index,
+                          datetime_format=datetime_format)
