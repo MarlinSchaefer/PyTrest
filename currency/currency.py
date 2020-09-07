@@ -41,8 +41,14 @@ class Money(object):
             ticker = currency.upper() + '=X'
         else:
             ticker = self.currency + currency.upper() + '=X'
-        data = yf.Ticker(ticker).history(start=start_date, end=end_date,
-                                         interval='1m')
+        try:
+            data = yf.Ticker(ticker).history(start=start_date,
+                                             end=end_date,
+                                             interval='1m')
+        except:
+            data = yf.Ticker(ticker).history(start=start_date,
+                                             end=end_date,
+                                             interval='1d')
         
         idx = np.argmin(np.abs([pt - date.astimezone(pt.tzinfo) for pt in data.index]))
         

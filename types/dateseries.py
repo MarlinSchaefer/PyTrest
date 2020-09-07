@@ -39,6 +39,14 @@ class DateSeries(object):
     def head_index(self):
         return self.head[0]
     
+    @property
+    def min_dateindex(self):
+        return min(self.index)
+    
+    @property
+    def max_dateindex(self):
+        return max(self.index)
+    
     def insert_value(self, dateindex, value=None):
         idx = np.searchsorted(np.array(self.index), dateindex)
         if self.index[idx] == dateindex:
@@ -65,6 +73,13 @@ class DateSeries(object):
         idx += np.argmin(np.abs([self.index[idx]-dateindex,
                                  self.index[idx+1]-dateindex]))
         self.head = [idx, self.index[idx]]
+    
+    def set_head_or_prior(self, dateindex):
+        if dateindex in self.index:
+            self.set_head(dateindex)
+        else:
+            idx = np.searchsorted(np.array(self.index), dateindex)
+            self.head = [idx-1, self.index[idx-1]]
     
     def __next__(self):
         if self.head[0] >= len(self) - 1:

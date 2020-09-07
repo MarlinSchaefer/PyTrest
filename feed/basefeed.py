@@ -26,6 +26,9 @@ class CandleFeed(DateSeries):
                             timestamp=dateindex, names=names)
             self.insert_value(dateindex, value=candle)
     
+    def value_by_name(self, name):
+        return self.value.get_by_name(name)
+    
     @property
     def open(self):
         data = []

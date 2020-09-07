@@ -118,11 +118,20 @@ class Candle(object):
                             conversion_date=self.timestamp)
         return self.data.get(k, d)
     
+    def get_by_name(self, name):
+        return self.get(self.names[name])
+    
     def convert(self, currency):
         data = {}
+        money_keys = [self.names[key] for key in ['open', 'close',
+                                                  'high', 'low']]
         for key, val in self.data.items():
-            if isinstance(val, Money):
-                data[key] = val.convert(currency, date=self.timestamp)
+            if key in money_keys:
+                if isinstance(val, Money):
+                    data[key] = val.convert(currency, date=self.timestamp)
+                else:
+                    tmp = Money(val, currency=self.currency)
+                    data[key] = tmp.convert(currency, date=self.timestamp)
             else:
                 data[key] = val
         ret = Candle(data=data, currency=currency,
