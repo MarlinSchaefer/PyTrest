@@ -138,7 +138,7 @@ class DateSeries(object):
         
         This function reduces the allowed index-range to [0, read-head].
         For positive integers within this range the call to this
-        function is euivalent to a call to iloc. For negative integers
+        function is equivalent to a call to iloc. For negative integers
         not the last entry of the DateSeries is taken as reference, but
         the position of the read-head.
         

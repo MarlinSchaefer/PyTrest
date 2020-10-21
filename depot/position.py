@@ -67,11 +67,17 @@ class Position(object):
             if found_matching is not None:
                 self.reduce_history[dateindex][found_matching][0] += amount
         if found_matching is None:
-            if price is None
+            if price is None:
+                price = self.candle_feed[dateindex].get_by_name(self.evaluate_at)
             self.reduce_history.append({dateindex: [amount, price]})
         
         self.amount -= amount
-        return price * amount
+        if self.position_type == 'long':
+            return price * amount
+        elif self.position_type == 'short':
+            return -price * amount
+        else:
+            raise RuntimeError
     
     def value(self):
         val = self.amount * self.candle_feed.value_by_name(self.evaluate_at)
