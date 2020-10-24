@@ -51,9 +51,6 @@ class DateSeries(object):
         idx = np.searchsorted(np.array(self.index), dateindex)
         if idx < len(self.index):
             if self.index[idx] == dateindex:
-                print('Trying to insert {} into index {}.'.format(dateindex, self.index))
-                print("dateindex in index: {}".format(dateindex in self.index))
-                print("dateindex in self: {}".format(dateindex in self))
                 msg = 'Cannot insert when index is already occupied. '
                 raise IndexError(msg)
         
