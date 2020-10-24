@@ -1,8 +1,10 @@
-import PyTrest.depot as dep
-import orderhistory as ordhist
-import brokercost as bk
-from PyTrest.types import PriorityQueue
-from PyTrest.feed import CandleFeed
+import warnings
+import datetime
+from .. import depot as dep
+from . import orderhistory as ordhist
+from . import brokercost as bk
+from ..types.priorityQueue import PriorityQueue
+from ..feed import CandleFeed
 
 """
 Broker commands
@@ -17,25 +19,34 @@ Broker commands
 
 class Broker(object):
     def __init__(self, depots=None, active_depot=None, history=None,
-                 broker_cost=None):
+                 broker_cost=None, tax=None):
         self.depots = depots
         self.active_depot = active_depot
         #TODO: Replace the order history with a non-base class once implemented.
         self.history = history if history is not None else ordhist.BaseOrderHistory()
-        #TODO: Replace broker cost with a non-base class once implemented.
-        self.broker_cost = bk.BaseBrokerCost()
+        self.broker_cost = broker_cost if broker_cost is not None else bk.NoBrokerCost()
         self.order_queue = PriorityQueue()
+        self.orders = {}
         self.current_dateindex = None
         self.candle_feeds = {}
         
-        order_function_dict = {"buy": self.process_buy_order,
-                               "sell": self.process_sell_order,
-                               "cancel": self.process_cancel_order,
-                               "buy_cancel": self.process_buy_cancel_order,
-                               "sell_cancel": self.process_sell_cancel_order,
-                               "adjust_amount":self.process_adjust_amount_order
-                               }
+        self.order_function_dict = {"buy": self.process_buy_order,
+                                    "sell": self.process_sell_order,
+                                    "cancel": self.process_cancel_order,
+                                    "buy_cancel": self.process_buy_cancel_order,
+                                    "sell_cancel": self.process_sell_cancel_order,
+                                    "adjust_amount": self.process_adjust_amount_order,
+                                    "drop_from_queue": self.process_drop_from_queue_order
+                                    }
         return
+    
+    @property
+    def max_order_id(self):
+        order_ids = list(self.orders.keys())
+        if len(order_ids) == 0:
+            return -1
+        else:
+            return max(order_ids)
     
     @property
     def depots(self):
@@ -43,10 +54,10 @@ class Broker(object):
     
     @depots.setter
     def depots(self, depots):
-        self._depot = {}
+        self._depots = {}
         if depots is None:
             return
-        elif isinstance(depots, dep.BaseDepot):
+        elif isinstance(depots, dep.Depot):
             self.add_depot(depots)
             return
         else:
@@ -55,7 +66,7 @@ class Broker(object):
             msg += 'depot instance.'
             try:
                 depots = list(depots)
-                if all([isinstance(depot, dep.BaseDepot) for depot in depots]):
+                if all([isinstance(depot, dep.Depot) for depot in depots]):
                     for depot in depots:
                         self.add_depot(depot)
                 else:
@@ -66,7 +77,7 @@ class Broker(object):
     def get_depot_name(self, depot):
         if isinstance(depot, str):
             return depot
-        elif isinstance(depot, dep.BaseDepot):
+        elif isinstance(depot, dep.Depot):
             for key, val in self.depots.items():
                 if val == depot:
                     return key
@@ -77,7 +88,7 @@ class Broker(object):
             return None
     
     def add_depot(self, depot, name=None):
-        if isinstance(depot, dep.BaseDepot):
+        if isinstance(depot, dep.Depot):
             if name is None:
                 name = depot.name
             if name in self.depots:
@@ -86,7 +97,7 @@ class Broker(object):
                 msg += 'already a Depot with the same name requistered '
                 msg += 'with this Broker.'
                 raise ValueError(msg)
-            self.depot[name] = depot
+            self.depots[name] = depot
             self.active_depot = name
         else:
             msg = 'The provided Depot must be a sub-class of '
@@ -94,7 +105,7 @@ class Broker(object):
             raise ValueError(msg)
     
     def remove_depot(self, depot):
-        if not (isinstance(depot, str) or isinstance(depot, dep.BaseDepot)):
+        if not (isinstance(depot, str) or isinstance(depot, dep.Depot)):
             msg = 'Depots may only be removed by providing the name as '
             msg += f'a string or the Depot itself. Got {type(depot)} '
             msg += 'instead.'
@@ -133,6 +144,24 @@ class Broker(object):
     def candle_feeds_to_current_date(self):
         for cf in self.candle_feeds.values():
             cf.set_head_or_prior(self.current_dateindex)
+        depot_fees = self.broker_cost.on_date(self.current_dateindex)
+        if depot_fees > 0:
+            rem_depots = []
+            for key, depot in self.depots.items():
+                exe = depot.pay_broker(depot_fees, msg='Broker: Depot cost')
+                if not exe:
+                    depot.save()
+                    rem_depots.append(key)
+                    msg = 'Could not pay the required cost for the depot'
+                    msg += ' {}. Removed it from the Broker.'
+                    msg = msg.format(key)
+                    warnings.warn(msg, RuntimeWarning)
+            for key in rem_depots:
+                self.depots.pop(key)
+    
+    def depots_to_current_date(self):
+        for depot in self.depots.values():
+            depot.curr_dateindex = self.current_dateindex
     
     def advance_time(self, timedelta=None, process_order_queue=True):
         if process_order_queue:
@@ -143,7 +172,7 @@ class Broker(object):
                 date = cf.next_date()
                 if date > self.current_dateindex:
                     next_dates.append(date)
-            if len(next_date) == 0:
+            if len(next_dates) == 0:
                 raise StopIteration
             self.current_dateindex = min(next_dates)
         else:
@@ -151,6 +180,7 @@ class Broker(object):
                 raise TypeError
             self.current_dateindex += timedelta
         self.candle_feeds_to_current_date()
+        self.depots_to_current_date()
     
     def set_time(self, dateindex):
         for cf_name, cf in self.candle_feeds.items():
@@ -183,7 +213,15 @@ class Broker(object):
             filled.
         """
         depot = self.get_depot_name(depot)
-        self.order_queue.enqueue((depot, order), priority=dateindex)
+        cost = self.broker_cost.on_order_comission(order)
+        exe = self.depots[depot].pay_broker(cost, msg='Broker: Order comission')
+        if not exe:
+            msg = 'Order was not accepted by the Broker because the '
+            msg += 'costs could not be covered by the Depot {}.'
+            msg = msg.format(depot)
+            warnings.warn(msg, RuntimeWarning)
+        else:
+            self.order_queue.enqueue((depot, order), priority=dateindex)
     
     def process_order_queue(self):
         next_queue = PriorityQueue()
@@ -193,17 +231,90 @@ class Broker(object):
                 next_queue.enqueue((depot, order),
                                    priority=self.current_dateindex)
             else:
-                fill_status = self.order_function_dict[eval_order[0]](depot,
+                if order.order_id is -1:
+                    order_id = self.max_order_id + 1
+                    order.order_id = order_id
+                    self.orders[order_id] = order
+                else:
+                    order_id = order.order_id
+                    if order_id in self.orders:
+                        if not order == self.orders[order_id]:
+                            msg = 'Found existing order with the same '
+                            msg += 'ID. Will assign a new, unique ID.'
+                            warnings.warn(msg, RuntimeWarning)
+                            order_id = self.max_order_id + 1
+                            order.order_id = order_id
+                            self.orders[order_id] = order
+                    else:
+                        self.orders[order_id] = order
+                eval_order[1].update({'order_id': order_id})
+                fill_status = self.order_function_dict[eval_order[0]](depot, order,
                                                                       **eval_order[1])
                 order.status = fill_status
-                self.history.add(self.current_dateindex, depot, order)
+                #self.history.add(self.current_dateindex, depot, order)
         self.order_queue = next_queue
+    
+    def cancel_order(self, depot, order_id):
+        order = self.orders[order_id]
+        order.status = 'canceled'
+        order.command = 'drop_from_queue'
+        order.arguments.update({'order_status': order.status})
+        cost = self.broker_cost.on_order_cancel(self.order[order_id])
+        exe = depot.pay_broker(cost, msg='Broker: Cancel order {}'.format(order_id))
+        if not exe:
+            msg = 'Depot {} did not contain sufficient funds to pay the'
+            msg += ' broker for canceling the order {}. The depot was '
+            msg += 'therefore removed from the broker.'
+            msg = msg.format(depot, order_id)
+            warnings.warn(msg, RuntimeWarning)
+            self.remove_depot(depot)
     
     ##################
     #Order processing#
     ##################
-    def process_buy_order(self, depot, **kwargs):
-        return "failed"
+    def process_buy_order(self, depot, order, **kwargs):
+        depot = self.get_depot_name(depot)
+        cf = kwargs.get('candle_feed', None)
+        if cf is None:
+            msg = 'No CandleFeed provided to this buy order. Will cancel'
+            msg += ' the order.'
+            warnings.warn(msg, RuntimeWarning)
+            self.cancel_order(depot, kwargs.get('order_id'))
+            return "canceled"
+        if cf not in list(self.candle_feeds.values()):
+            msg = 'Trying to buy from unknown CandleFeed {}.'.format(cf)
+            msg += ' Order is canceled.'
+            warnings.warn(msg, RuntimeWarning)
+            self.cancel_order(depot, kwargs.get('order_id'))
+            return "canceled"
+        price = kwargs.get('price', cf.value.high)
+        amount = kwargs.get('amount', None)
+        if not isinstance(amount, int):
+            msg = 'Could not interpret the amount requested by the buy-'
+            msg += 'order. Will cancel the order.'
+            warnings.warn(msg, RuntimeWarning)
+            self.cancel_order(depot, kwargs.get('order_id'))
+            return "canceled"
+        cost = self.broker_cost.on_order_execution(order, price*amount)
+        if self.depots[depot].cash < amount * price + cost:
+            msg = 'The targeted depot {} did not provide enough funds '
+            msg += 'to cover the expenses for the position and the '
+            msg += 'mandatory broker fee. Will cancel the order.'
+            warnings.warn(msg, RuntimeWarning)
+            self.cancel_order(depot, kwargs.get('order_id'))
+            return "canceled"
+        if cost > 0:
+            exe = self.depots[depot].pay_broker(cost, 'Broker: Order execution {}'.format(kwargs.get('order_id')))
+        else:
+            exe = True
+        
+        if not exe:
+            raise RuntimeError
+        
+        self.depots[depot].open_position(cf, dateindex=cf.dateindex,
+                                         amount=amount, price=price,
+                                         position_type=kwargs.get('position_type', 'long'))
+        return "filled"
     
     def process_sell_order(self, depot, **kwargs):
         return "failed"
@@ -219,3 +330,6 @@ class Broker(object):
     
     def process_adjust_amount_order(self, depot, **kwargs):
         return "failed"
+    
+    def process_drop_from_queue_order(self, depot, **kwargs):
+        return kwargs.get('order_status', "failed")

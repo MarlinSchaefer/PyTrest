@@ -49,9 +49,13 @@ class DateSeries(object):
     
     def insert_value(self, dateindex, value=None):
         idx = np.searchsorted(np.array(self.index), dateindex)
-        if self.index[idx] == dateindex:
-            msg = 'Cannot insert when index is already occupied.'
-            raise IndexError(msg)
+        if idx < len(self.index):
+            if self.index[idx] == dateindex:
+                print('Trying to insert {} into index {}.'.format(dateindex, self.index))
+                print("dateindex in index: {}".format(dateindex in self.index))
+                print("dateindex in self: {}".format(dateindex in self))
+                msg = 'Cannot insert when index is already occupied. '
+                raise IndexError(msg)
         
         #Check if head needs to be moved
         if idx < self.head[0]:
@@ -154,7 +158,7 @@ class DateSeries(object):
             The object stored at the index location.
         """
         if index < 0:
-            index = self.head[0] + 1 - index
+            index = self.head[0] + 1 + index
         if index < 0 or index > self.head[0]:
             raise IndexError('Index out of range.')
         return self.data[index]

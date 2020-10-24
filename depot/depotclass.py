@@ -2,11 +2,12 @@ from PyTrest.depot.portfolio import Portfolio
 from PyTrest.depot.depothistory import DepotHistory
 from PyTrest.currency import Money
 from PyTrest.depot.position import Position
+from PyTrest.depot.taxes import TaxFree
 import warnings
 
 class Depot(object):
     def __init__(self, name='N/A', base_cash=None, currency='USD',
-                 history=None, curr_dateindex=None):
+                 history=None, curr_dateindex=None, tax=None):
         self.name = str(name)
         self.cash = Money(base_cash, currency=currency)
         if history is None:
@@ -16,7 +17,8 @@ class Depot(object):
         else:
             self.history = history
         self.curr_dateindex = curr_dateindex
-        self.protfolio = Portfolio()
+        self.portfolio = Portfolio()
+        self.tax = tax if tax is not None else TaxFree(currency=self.currency)
     
     @property
     def currency(self):
@@ -29,7 +31,7 @@ class Depot(object):
         self.history.add_funds(funds, dateindex)
         self.cash += funds
     
-    def pay_broker(self, cash, dateindex=None):
+    def pay_broker(self, cash, dateindex=None, msg=''):
         if dateindex is None:
             dateindex = self.curr_dateindex
         if cash > self.cash:
@@ -38,7 +40,7 @@ class Depot(object):
             return False
         else:
             self.cash -= cash
-            self.history.pay_broker(cash, dateindex)
+            self.history.pay_broker(cash, dateindex, msg=msg)
             return True
     
     def withdraw_funds(self, funds, dateindex=None):
@@ -51,8 +53,6 @@ class Depot(object):
         return funds
     
     def cash_from_position(self, cash, dateindex=None):
-        print("ADD TAXES TO cash_from_position!")
-        #TODO: Implement taxes
         if dateindex is None:
             dateindex = self.curr_dateindex
         self.history.cash_from_position(cash, dateindex)
@@ -77,11 +77,14 @@ class Depot(object):
                        evaluate_at=evaluate_at,
                        position_type=position_type)
         total_cost = pos.open_price * pos.open_amount
+        taxes = self.tax.on_position_entry(pos)
+        total_cost += taxes
         if total_cost > self.cash:
             msg = 'The depot has insufficient cash assigned. Could not '
             msg += 'open the position.'
             warnings.warn(msg, RuntimeWarning)
         else:
+            
             self.cash_from_position(-total_cost, dateindex=dateindex)
             self.portfolio.add_position(pos)
     
@@ -91,6 +94,8 @@ class Depot(object):
         cash_delta = self.portfolio.close_position(position,
                                                    dateindex=dateindex,
                                                    price=price)
+        taxes = self.tax.on_position_exit(position)
+        cash_delta -= taxes
         self.cash_from_position(cash_delta, dateindex=dateindex)
         self.history.close_position(position, dateindex=dateindex)
     
@@ -102,6 +107,8 @@ class Depot(object):
                                                          amount,
                                                          dateindex=dateindex,
                                                          price=price)
+        taxes = self.tax.on_position_reduce(position)
+        cash_delta -= taxes
         self.cash_from_position(cash_delta, datetime=datetime)
         self.history.reduce_position_size(position, dateindex)
     pass

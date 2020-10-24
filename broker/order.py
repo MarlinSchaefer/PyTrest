@@ -37,6 +37,18 @@ class BaseOrder(object):
         self.arguments = arguments if arguments is not None else {}
     
     @property
+    def constraints(self):
+        return self._constraints
+    
+    @constraints.setter
+    def constraints(self, constraints):
+        if constraints is None:
+            self._constraints = []
+        else:
+            if all([isinstance(constraint, pytr_const.Constraint) for constraint in constraints]):
+                self._constraints = list(constraints)
+    
+    @property
     def command(self):
         return self._command
     
@@ -67,7 +79,7 @@ class BaseOrder(object):
             msg += '{}.'.format(order_id)
             raise ValueError(msg)
         else:
-            self.order_id = order_id
+            self._order_id = order_id
     
     @property
     def status(self):
@@ -80,7 +92,8 @@ class BaseOrder(object):
                      2: 'active',
                      3: 'partially filled',
                      4: 'filled',
-                     5: 'failed'}
+                     5: 'failed',
+                     6: 'canceled'}
         if not isinstance(status, (int, str)):
             raise TypeError
         if isinstance(status, int):
@@ -97,7 +110,7 @@ class BaseOrder(object):
     @property
     def closed(self):
         closed_status = ['empty', 'partially filled', 'filled',
-                         'failed']
+                         'failed', 'canceled']
         return self.status in closed_status
     
     @property
@@ -105,7 +118,7 @@ class BaseOrder(object):
         return self.status == 'active'
     
     def add_constraint(self, constraint):
-        if not isinstance(constraint, constraints.Constraint):
+        if not isinstance(constraint, pytr_const.Constraint):
             msg = 'The constraint needs to be of type '
             msg += 'PyTrest.constraints.Constraint. Got type {} '
             msg += 'instead.'
@@ -141,6 +154,8 @@ class BaseOrder(object):
             command for the Broker. All the second entry specifies the
             arguments for the command.
         """
+        if self.closed:
+            return ('drop_from_queue', {'order_status': self.status})
         dateindex = self.parse_dateindex(dateindex)
         constrains_passed = []
         for constraint in self.constraints:
@@ -175,6 +190,7 @@ class BuyOrder(BaseOrder):
                          arguments=arguments
                          )
         self.buy_on = buy_on
+        self.status = 'active'
     
     @property
     def buy_on(self):
@@ -206,4 +222,5 @@ class BuyOrder(BaseOrder):
         else:
             raise RuntimeError
         self.arguments['price'] = price
+        self.arguments['candle_feed'] = self.candle_feed
         return super().evaluate(dateindex=dateindex)

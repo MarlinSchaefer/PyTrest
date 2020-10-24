@@ -8,7 +8,7 @@ class DepotHistory(object):
     def add_funds(self, funds, dateindex, msg=None):
         if msg is None:
             msg = 'Added'
-        if dateindex in self.cash_history:
+        if dateindex in self.cash_history.index:
             self.cash_history[dateindex].append((str(msg), funds))
         else:
             self.cash_history.insert_value(dateindex, value=[(str(msg), funds)])

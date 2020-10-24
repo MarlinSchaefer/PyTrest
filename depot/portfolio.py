@@ -1,4 +1,5 @@
-from PyTrest.depot.position import Position
+from ..currency import Money
+from .position import Position
 
 class Portfolio(object):
     def __init__(self):

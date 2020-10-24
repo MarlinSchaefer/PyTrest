@@ -1,5 +1,6 @@
-from PyTrest.types import DictList
-from PyTrest.currency import Money
+import datetime
+from ..types import DictList
+from ..currency import Money
 
 class Position(object):
     def __init__(self, candle_feed, dateindex=None, amount=1,
@@ -15,7 +16,7 @@ class Position(object):
         self.reduce_history = DictList()
         self.currency = currency
         
-        assert isinstance(amount, int) and ammount > 0
+        assert isinstance(amount, int) and amount > 0
         self.open_amount = amount
         self.amount = amount
         
@@ -83,7 +84,8 @@ class Position(object):
         val = self.amount * self.candle_feed.value_by_name(self.evaluate_at)
         return Money(val, currency=self.currency)
     
-    def returns(self, position_type='long'):
+    @property
+    def returns(self):
         start_val = self.open_amount * self.open_price
         cur_val = Money(0., currency=self.currency)
         for datehistory in self.reduce_history.values():

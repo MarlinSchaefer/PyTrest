@@ -7,6 +7,9 @@ class BaseTax(object):
     def on_position_entry(self, position):
         raise NotImplementedError('Function needs to be implemented.')
     
+    def on_position_reduce(self, position):
+        raise NotImplementedError('Function needs to be implemented.')
+    
     def on_position_exit(self, position):
         raise NotImplementedError('Function needs to be implemented.')
     
@@ -26,6 +29,9 @@ class TaxFree(BaseTax):
     def on_position_entry(self, position):
         return self.zero
     
+    def on_position_reduce(self, position):
+        return self.zero
+    
     def on_position_exit(self, position):
         return self.zero
     
@@ -42,31 +48,41 @@ class GermanTax(BaseTax):
     def __init__(self, tax_rate=0.25):
         self.tax_rate = tax_rate
         self.tax_free_money = Money(0., currency='EUR')
+        self.zero = Money(0., currency='EUR')
     
     def on_position_entry(self, position):
-        return Money(0., currency='EUR')
+        return self.zero
     
     def calculate_taxes(self, gains):
-        if gains < 0:
-            self.tax_free_money += gains
+        self.tax_free_money -= gains
+        if self.tax_free_money < 0:
+            taxes = -self.tax_free_money * self.tax_rate
+            self.tax_free_money *= 0.
         else:
-            self.tax_free_money -= gains
-        taxes = abs(self.tax_free_money) * self.tax_rate
-        self.tax_free_money *= 0.
+            taxes = self.zero
         return taxes
     
-    def on_position_exit(self, position):
-        if position.closed:
-            gains = position.returns
+    def on_position_reduce(self, position):
+        hist = position.reduce_history
+        dateindex = max(hist.keys())
+        amount = hist[dateindex][0]
+        curr_price = hist[dateindex][1]
+        curr_val = amount * curr_price
+        init_val = amount * position.open_price
+        if position.position_type == 'long':
+            returns = curr_val - init_val
         else:
-            gains = 0.
-        return self.calculate_taxes(gains)
+            returns = init_val - curr_val
+        return self.calculate_taxes(returns)
+    
+    def on_position_exit(self, position):
+        return self.on_position_reduce(position)
     
     def on_order(self, order):
-        return Money(0., currency='EUR')
+        return self.zero
     
     def on_update(self, date, positions):
-        return Money(0., currency='EUR')
+        return self.zero
     
     def on_dividend(self, dividend):
         return self.calculate_taxes(dividend)

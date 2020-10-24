@@ -29,14 +29,16 @@ class Money(object):
         self.conversion_date = date
     
     def convert(self, currency, date=None):
+        if currency == self.currency:
+            return self
         if date is None:
             if self.conversion_date is None:
                 date = datetime.datetime.now()
             else:
                 date = self.conversion_date
         
-        start_date = (date - datetime.timedelta(days=1)).date()
-        end_date = date.date() + datetime.timedelta(days=1)
+        start_date = (date - datetime.timedelta(days=3)).date()
+        end_date = date.date() + datetime.timedelta(days=3)
         if self.currency == 'USD':
             ticker = currency.upper() + '=X'
         else:
