@@ -304,7 +304,7 @@ class Broker(object):
             self.cancel_order(depot, kwargs.get('order_id'))
             return "canceled"
         if cost > 0:
-            exe = self.depots[depot].pay_broker(cost, 'Broker: Order execution {}'.format(kwargs.get('order_id')))
+            exe = self.depots[depot].pay_broker(cost, msg='Broker: Order execution {}'.format(kwargs.get('order_id')))
         else:
             exe = True
         

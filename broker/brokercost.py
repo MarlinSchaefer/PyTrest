@@ -1,6 +1,6 @@
 import numpy as np
 import datetime
-from PyTrest.currency import Money
+from ..currency import Money
 
 class BaseBrokerCost(object):
     def __init__(self, currency='USD'):
@@ -90,7 +90,7 @@ class PercentageFee(BaseBrokerCost):
     
     def on_order_execution(self, order, price):
         perc_fee = Money(price * self.perc, currency=self.currency)
-        return min(self.max_fee, min(self.min_fee, perc_fee))
+        return min(self.max_fee, max(self.min_fee, perc_fee))
     
     def on_order_cancel(self, order):
         return self.min_fee

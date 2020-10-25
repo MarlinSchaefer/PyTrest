@@ -1,5 +1,6 @@
 import datetime
 import numpy as np
+import matplotlib.pyplot as plt
 
 class DateSeries(object):
     def __init__(self, data=None, index=None,
@@ -174,7 +175,7 @@ class DateSeries(object):
         self.head = original_head
         return ret
     
-    def __getitem__(self, dateindex):
+    def sanitize_slice(self, dateindex):
         if isinstance(dateindex, slice):
             #Clean up start, stop and step
             start = dateindex.start
@@ -246,6 +247,16 @@ class DateSeries(object):
                     msg += 'form of a datetime.timedelta must be '
                     msg += 'provided.'
                     raise TypeError(msg)
+            return start, stop, step
+        else:
+            msg = 'sanitize_slice expected a slice as input type. Got '
+            msg += '{} instead.'
+            msg = msg.format(type(dateindex))
+            raise TypeError(msg)
+    
+    def __getitem__(self, dateindex):
+        if isinstance(dateindex, slice):
+            start, stop, step = self.sanitize_slice(dateindex)
             
             #Loop over the slice
             ret = []
@@ -273,6 +284,36 @@ class DateSeries(object):
         if isinstance(dateindex, datetime.datetime):
             return self.loc(dateindex)
         raise TypeError('Unrecognized type.')
+    
+    def copy(self):
+        ret = self.__class__(data=self.data.copy(),
+                             index=self.index.copy(),
+                             datetime_format=self.datetime_format)
+        ret.head = self.head.copy()
+        return ret
+    
+    def plot(self, fig=None, ax=None, **kwargs):
+        if fig is None:
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = plt.figure()
+                fig.add_axes(ax)
+        else:
+            if ax is None:
+                ax = fig.add_subplot(111)
+        x_float = []
+        y_float = []
+        for x, y in zip(self.index, self.data):
+            try:
+                y_float.append(float(y))
+                x_float.append(x)
+            except:
+                pass
+        if len(y_float) < 2:
+            return fig, ax
+        ax.plot(x_float, y_float, **kwargs)
+        return fig, ax
     
     #All math functionality
     def __add__(self, other):
@@ -309,3 +350,33 @@ class DateSeries(object):
         datetime_format = self.datetime_format
         return DateSeries(data=data, index=index,
                           datetime_format=datetime_format)
+    
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            data = (self.data == other.data)
+            index = (self.index == other.index)
+            return (data and index)
+        else:
+            return False
+    
+    def __array__(self):
+        prep_index = [np.datetime64(date) for date in self.index]
+        prep_values = []
+        for val in self.data:
+            try:
+                prep_values.append(float(val))
+            except:
+                prep_values.append(val)
+        content = [(np.datetime64(date), val) for (date, val) in zip(prep_index, prep_values)]
+        return np.array(content, dtype=[('dateindex', np.dtype('datetime64[us]')),
+                                        ('data', np.array(prep_values).dtype)])
+    
+    def __array__ufunc__(self, ufunc, method, *inputs, **kwargs):
+        func = getattr(ufunc, method)
+        act_inputs = []
+        for inp in inputs:
+            if isinstance(inp, self.__class__):
+                act_inputs.append(inp.data)
+            else:
+                return NotImplemented
+        return func(*act_inputs, **kwargs)

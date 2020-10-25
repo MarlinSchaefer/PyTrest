@@ -1,4 +1,4 @@
-from PyTrest.types import DateSeries
+from ..types import DateSeries
 
 class DepotHistory(object):
     def __init__(self):

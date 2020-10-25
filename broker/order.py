@@ -1,4 +1,4 @@
-import PyTrest.broker.constraints as pytr_const
+from . import constraints as pytr_const
 
 class BaseOrder(object):
     """

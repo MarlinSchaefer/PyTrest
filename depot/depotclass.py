@@ -1,8 +1,8 @@
-from PyTrest.depot.portfolio import Portfolio
-from PyTrest.depot.depothistory import DepotHistory
-from PyTrest.currency import Money
-from PyTrest.depot.position import Position
-from PyTrest.depot.taxes import TaxFree
+from .portfolio import Portfolio
+from .depothistory import DepotHistory
+from ..currency import Money
+from .position import Position
+from .taxes import TaxFree
 import warnings
 
 class Depot(object):
@@ -23,6 +23,11 @@ class Depot(object):
     @property
     def currency(self):
         return self.cash.currency
+    
+    def value(self, currency=None):
+        if currency is None:
+            currency = self.currency
+        return self.cash.convert(currency) + self.portfolio.value(currency=currency)
     
     def add_funds(self, funds, dateindex=None):
         assert funds >= 0
@@ -84,7 +89,6 @@ class Depot(object):
             msg += 'open the position.'
             warnings.warn(msg, RuntimeWarning)
         else:
-            
             self.cash_from_position(-total_cost, dateindex=dateindex)
             self.portfolio.add_position(pos)
     

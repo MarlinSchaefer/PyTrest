@@ -86,8 +86,16 @@ class CandleFeed(DateSeries):
         return CandleFeed(name=name, currency=currency, data=data,
                           index=index, datetime_format=datetime_format)
     
-    def plot(self):
-        fig, ax = plt.subplots()
+    def plot(self, fig=None, ax=None, **kwargs):
+        if fig is None:
+            if ax is None:
+                fig, ax = plt.subplots()
+            else:
+                fig = plt.figure()
+                fig.add_axes(ax)
+        else:
+            if ax is None:
+                ax = fig.add_subplot(111)
         width = datetime.timedelta(days=0.5)
         for date, candle in zip(self.index, self.data):
             if candle.open < candle.close:
@@ -98,11 +106,11 @@ class CandleFeed(DateSeries):
                     [float(candle.low), float(candle.high)],
                     color=color)
             height = float(candle.close - candle.open)
-            ax.add_patch(Rectangle((date-width/2, float(candle.close)),
+            ax.add_patch(Rectangle((date-width/2, float(candle.open)),
                                    width,
                                    height,
                                    color=color))
-        plt.show()
+        return fig, ax
 
 class YahooFeed(CandleFeed):
     def __init__(self, ticker, currency='USD',

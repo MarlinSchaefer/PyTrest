@@ -1,22 +1,21 @@
 import numpy as np
 import datetime
 import warnings
-from PyTrest.currency import Money
+from ..currency import Money
 
 class Candle(object):
     def __init__(self, data=None, currency=None, timestamp=None,
                  names=None):
+        self.required_keys = ['open', 'close', 'high', 'low', 'volume']
+        self.names = {'open': 'Open',
+                      'close': 'Close',
+                      'high': 'High',
+                      'low': 'Low',
+                      'volume': 'Volume'}
         if names is None:
-            self.names = {'open': 'Open',
-                        'close': 'Close',
-                        'high': 'High',
-                        'low': 'Low',
-                        'volume': 'Volume'}
-        else:
-            for key in ['open', 'close', 'high', 'low', 'volume']:
-                if key not in names:
-                    raise ValueError
-            self.names = names
+            names = {}
+        self.names.update(names)
+        
         self.timestamp = timestamp
         self.currency = currency
         self.data = data
@@ -64,7 +63,7 @@ class Candle(object):
                     data[val] = np.nan
             if len(missing_data) > 0:
                 msg = 'Data is missing required keys {}.'.format(missing_data)
-                warning.warn(msg, RuntimeWarning)
+                warnings.warn(msg, RuntimeWarning)
             self._data = data
         else:
             raise TypeError('Unrecognized type.')
@@ -139,24 +138,112 @@ class Candle(object):
         ret.names = self.names
         return ret
     
+    def intersecting_keys(self, other):
+        if not isinstance(other, type(self)):
+            return
+        self_keys = list(self.keys())
+        other_keys = list(other.keys())
+        for key in self.required_keys:
+            self_keys.remove(self.names[key])
+            other_keys.remove(other.names[key])
+        
+        return list(set(self_keys).intersection(set(other_keys)))
+    
     #All math operations
-    def __add__(self, other):
-        if isinstance(other, (dict, type(self))):
-            assert list(other.keys()) == list(self.keys())
+    def binary_operator(self, other, function_name):
+        if isinstance(other, type(self)):
+            data = {}
+            for key in self.required_keys:
+                func = getattr(self.get_by_name(key), function_name)
+                data[self.names[key]] = func(other.get_by_name(key))
+            
+            for key in self.intersecting_keys(other):
+                func = getattr(self.get(key), function_name)
+                data[key] = func(other.get(key))
+            
+            return self.__class__(data=data, currency=self.currency,
+                                  timestamp=self.timestamp,
+                                  names=self.names)
+        else:
             data = {}
             for key in self.keys():
-                data[key] = self.get(key) + other.get(key)
+                func = getattr(self.get(key), function_name)
+                data[key] = func(other)
             
-            return Candle(data=data, currency=self.currency)
-        else:
-            raise TypeError()
+            return self.__class__(data=data, currency=self.currency,
+                                  timestamp=self.timestamp,
+                                  names=self.names)
+    
+    def unary_operator(self, function_name):
+        data = {}
+        for key in self.keys():
+            func = getattr(self.get(key), function_name)
+            data[key] = func()
+        return self.__class__(data=data, currency=self.currency,
+                              timestamp=self.timestamp,
+                              names=self.names)
+    
+    def __add__(self, other):
+        return self.binary_operator(other, '__add__')
     
     def __neg__(self):
-        data = {}
-        for key, val in self.data.items():
-            data[key] = -val
-        return self.__class__(data=data, currency=self.currency,
-                              timestamp=self.timestamp)
+        return self.unary_operator('__neg__')
+        #data = {}
+        #for key, val in self.data.items():
+            #data[key] = -val
+        #return self.__class__(data=data, currency=self.currency,
+                              #timestamp=self.timestamp,
+                              #names=self.names)
     
     def __sub__(self, other):
-        return self.__add__(-other)
+        return self.binary_operator(other, '__sub__')
+    
+    def __mul__(self, other):
+        return self.binary_operator(other, '__mul__')
+    
+    def __truediv__(self, other):
+        return self.binary_operator(other, '__truediv__')
+    
+    def __rtruediv__(self, other):
+        if isinstance(other, (float, int, Money)):
+            data = {}
+            for key in self.keys():
+                data[key] = other / self.get(key)
+            return self.__class__(data=data, currency=self.currency,
+                                  timestamp=self.timestamp,
+                                  names=self.names)
+    
+    def __abs__(self):
+        return self.unary_operator('__abs__')
+        #data = {}
+        #for key in self.keys():
+            #data[key] = abs(self.get(key))
+        #return self.__class__(data=data, currency=self.currency,
+                              #timestamp=self.timestamp,
+                              #names=self.names)
+    
+    def __and__(self, other):
+        return self.binary_operator(other, '__and__')
+    
+    def __or__(self, other):
+        return self.binary_operator(other, '__or__')
+    
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            return self.data == other.data
+        elif isinstance(other, dict):
+            return self.data == other
+        else:
+            return False
+    
+    def __ge__(self, other):
+        return self.binary_operator(other, '__ge__')
+    
+    def __gt__(self, other):
+        return self.binary_operator(other, '__gt__')
+    
+    def __le__(self, other):
+        return self.binary_operator(other, '__le__')
+    
+    def __lt__(self, other):
+        return self.binary_operator(other, '__lt__')
