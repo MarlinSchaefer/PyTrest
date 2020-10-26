@@ -260,23 +260,27 @@ class DateSeries(object):
             
             #Loop over the slice
             ret = []
+            ind = []
             if isinstance(start, int):
                 if step is None:
                     step = 1
                 for i in range(start, stop, step):
                     ret.append(self.iloc(i))
+                    ind.append(self.index[i])
             elif isinstance(start, datetime.datetime):
                 curr = min(start, stop)
                 step = abs(step)
                 while curr < max(start, stop):
                     ret.append(self.loc(curr))
+                    ind.append(curr)
                     curr += step
             else:
                 msg = 'Uncaught type-error with (start, stop, step) = '
                 msg += '({}, {}, {}).'.format(start, stop, step)
                 raise RuntimeError(msg)
                 pass
-            return ret
+            return DateSeries(data=ret, index=ind,
+                              datetime_format=self.datetime_format)
         elif isinstance(dateindex, int):
             return self.iloc(dateindex)
         elif isinstance(dateindex, str):
@@ -284,6 +288,9 @@ class DateSeries(object):
         if isinstance(dateindex, datetime.datetime):
             return self.loc(dateindex)
         raise TypeError('Unrecognized type.')
+    
+    def as_list(self):
+        return self.data
     
     def copy(self):
         ret = self.__class__(data=self.data.copy(),
@@ -316,14 +323,16 @@ class DateSeries(object):
         return fig, ax
     
     #All math functionality
-    def __add__(self, other):
-        if isinstance(other, type(self)):
+    def binary_operation(self, other, function_name):
+        if isinstance(other, DateSeries):
+            #print("Other is DateSeries, Trying to call function {}".format(function_name))
             index = []
             data = []
             for dateindex in self.index:
                 if dateindex in other.index:
                     index.append(dateindex)
-                    data.append(self.loc(dateindex) + other.loc(dateindex))
+                    func = getattr(self.loc(dateindex), function_name)
+                    data.append(func(other.loc(dateindex)))
             ret = DateSeries(data=data, index=index)
             ret.head = [0, index[0]]
             return ret
@@ -332,17 +341,63 @@ class DateSeries(object):
                 length = len(other)
             except:
                 #Expecting a scalar value here
-                return self.value + other
+                func = getattr(self.value, function_name)
+                return func(other)
             else:
                 if length == len(self):
                     data = []
                     for i, dat in enumerate(self, data):
-                        data.append(dat + other[i])
+                        func = getattr(dat, function_name)
+                        data.append(func(other[i]))
                     ret = DateSeries(data=data, index=self.index)
                     ret.head = self.head
                     return ret
                 else:
                     raise ValueError('Lengths do not match.')
+    
+    def __add__(self, other):
+        return self.binary_operation(other, '__add__')
+        #if isinstance(other, DateSeries):
+            #index = []
+            #data = []
+            #for dateindex in self.index:
+                #if dateindex in other.index:
+                    #index.append(dateindex)
+                    #data.append(self.loc(dateindex) + other.loc(dateindex))
+            #ret = DateSeries(data=data, index=index)
+            #ret.head = [0, index[0]]
+            #return ret
+        #else:
+            #try:
+                #length = len(other)
+            #except:
+                ##Expecting a scalar value here
+                #return self.value + other
+            #else:
+                #if length == len(self):
+                    #data = []
+                    #for i, dat in enumerate(self, data):
+                        #data.append(dat + other[i])
+                    #ret = DateSeries(data=data, index=self.index)
+                    #ret.head = self.head
+                    #return ret
+                #else:
+                    #raise ValueError('Lengths do not match.')
+    
+    def __sub__(self, other):
+        return self.binary_operation(other, '__sub__')
+    
+    def __lt__(self, other):
+        return self.binary_operation(other, '__lt__')
+    
+    def __le__(self, other):
+        return self.binary_operation(other, '__le__')
+    
+    def __gt__(self, other):
+        return self.binary_operation(other, '__gt__')
+    
+    def __ge__(self, other):
+        return self.binary_operation(other, '__ge__')
     
     def __neg__(self):
         data = [-dat for dat in self.data]
