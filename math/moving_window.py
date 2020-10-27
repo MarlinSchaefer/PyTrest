@@ -1,37 +1,18 @@
 import numpy as np
 import warnings
 import datetime
-from ..types import DateSeries
+from ..types import DateSeries, DateSeriesWrapper
 
-class MovingWindowOperation(DateSeries):
+class MovingWindowOperation(DateSeriesWrapper):
     def __init__(self, base, min_size=None, max_size=None, **kwargs):
-        self.base = base
+        self.window_operation = kwargs.pop('window_operation', NotImplemented)
         self.min_size = min_size
         self.max_size = max_size
-        self.window_operation = kwargs.pop('window_operation', NotImplemented)
-        super().__init__(**kwargs)
-        self.head = self.base.head.copy()
-        self.last_base = None
         self.set_window_operation()
-        self.check_base()
-    
-    def set_window_operation(self):
-        """This function is called on each window. The outputs are
-        stored in this object.
-        
-        It must set the variable `self.window_operation` to a callable.
-        
-        Arguments
-        ---------
-        None
-        
-        Returns
-        -------
-        None
-        """
-        raise NotImplementedError
+        super().__init__(base, **kwargs)
     
     def check_base(self):
+        super().check_base()
         if not self.last_base == self.base:
             self.last_base = self.base.copy()
             self.index = self.base.index.copy()
@@ -44,10 +25,6 @@ class MovingWindowOperation(DateSeries):
                     start = 0 if self.max_size is None else max(0, stop - self.max_size)
                     window = self.base[start:stop].as_list()
                     self.data.append(self.window_operation(window))
-    
-    def __getitem__(self, dateindex):
-        self.check_base()
-        return super().__getitem__(dateindex)
     
     def copy(self):
         return self.__class__(self.base, min_size=self.min_size,
@@ -84,6 +61,10 @@ class Min(SimpleMovingWindow):
 class Max(SimpleMovingWindow):
     def set_window_operation(self):
         self.window_operation = lambda window: None if None in window else np.max(window)
+
+class Std(SimpleMovingWindow):
+    def set_window_operation(self):
+        self.window_operation = lambda window: None if None in window else np.std(window)
 
 #class MovingTransformationWindow(DateSeries):
     #def __init__(self, base, window_size=2):

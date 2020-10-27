@@ -341,8 +341,13 @@ class DateSeries(object):
                 length = len(other)
             except:
                 #Expecting a scalar value here
-                func = getattr(self.value, function_name)
-                return func(other)
+                data = []
+                for dat in self.data:
+                    func = getattr(dat, function_name)
+                    data.append(func(other))
+                ret = DateSeries(data=data, index=self.index)
+                ret.head = self.head
+                return ret
             else:
                 if length == len(self):
                     data = []
@@ -357,35 +362,27 @@ class DateSeries(object):
     
     def __add__(self, other):
         return self.binary_operation(other, '__add__')
-        #if isinstance(other, DateSeries):
-            #index = []
-            #data = []
-            #for dateindex in self.index:
-                #if dateindex in other.index:
-                    #index.append(dateindex)
-                    #data.append(self.loc(dateindex) + other.loc(dateindex))
-            #ret = DateSeries(data=data, index=index)
-            #ret.head = [0, index[0]]
-            #return ret
-        #else:
-            #try:
-                #length = len(other)
-            #except:
-                ##Expecting a scalar value here
-                #return self.value + other
-            #else:
-                #if length == len(self):
-                    #data = []
-                    #for i, dat in enumerate(self, data):
-                        #data.append(dat + other[i])
-                    #ret = DateSeries(data=data, index=self.index)
-                    #ret.head = self.head
-                    #return ret
-                #else:
-                    #raise ValueError('Lengths do not match.')
+    
+    def __radd__(self, other):
+        return self.binary_operation(other, '__radd__')
     
     def __sub__(self, other):
         return self.binary_operation(other, '__sub__')
+    
+    def __rsub__(self, other):
+        return self.binary_operation(other, '__rsub__')
+    
+    def __mul__(self, other):
+        return self.binary_operation(other, '__mul__')
+    
+    def __rmul__(self, other):
+        return self.binary_operation(other, '__rmul__')
+    
+    def __truediv__(self, other):
+        return self.binary_operation(other, '__truediv__')
+    
+    def __rtruediv__(self, other):
+        return self.binary_operation(other, '__rtruediv__')
     
     def __lt__(self, other):
         return self.binary_operation(other, '__lt__')
@@ -435,3 +432,45 @@ class DateSeries(object):
             else:
                 return NotImplemented
         return func(*act_inputs, **kwargs)
+
+class DateSeriesWrapper(DateSeries):
+    def __init__(self, base, **kwargs):
+        self.base = base
+        self.last_base = None
+        super().__init__(**kwargs)
+        self.head = self.base.head.copy()
+        if self.check_base() is NotImplemented:
+            msg = 'Trying to use the base-class `DateSeriesWrapper`. '
+            msg += 'Please inherit from this class and implement the '
+            msg += 'function `check_base`. See details on the '
+            msg += 'implementation in the docstring of the function.'
+            raise NotImplementedError(msg)
+    
+    def __getitem__(self, dateindex):
+        if self.check_base() is NotImplemented:
+            msg = 'Trying to use the base-class `DateSeriesWrapper`. '
+            msg += 'Please inherit from this class and implement the '
+            msg += 'function `check_base`. See details on the '
+            msg += 'implementation in the docstring of the function.'
+            raise NotImplementedError(msg)
+        return super().__getitem__(dateindex)
+    
+    def check_base(self):
+        """This function checks the base-DateSeries for any changes. If
+        changes are detected the content of this DateSeries is updated.
+        
+        Please implement it by using the following skeleton:
+        
+        def check_base(self):
+            super().check_base()
+            if not self.base == self.last_base:
+                #Code to calculate the contents of this wrapper
+        """
+        if hasattr(self.base, 'check_base'):
+            self.base.check_base()
+        return NotImplemented
+    
+    def copy(self):
+        return self.__class__(self.base, data=self.data,
+                              index=self.index,
+                              datetime_format=self.datetime_format)

@@ -1,7 +1,7 @@
 import warnings
-from ..types import DateSeries
+from ..types import DateSeries, DateSeriesWrapper
 
-class EMA(DateSeries):
+class EMA(DateSeriesWrapper):
     def __init__(self, base, window_size=None, alpha=None, **kwargs):
         if window_size is None and alpha is None:
             msg = 'Either the window size or the alpha-value has to be '
@@ -20,11 +20,7 @@ class EMA(DateSeries):
             self.alpha = alpha
         self.inv_alpha = 1 - self.alpha
         
-        self.base = base
-        super().__init__(**kwargs)
-        self.head = self.base.head.copy()
-        self.last_base = None
-        self.check_base()
+        super().__init__(base, **kwargs)
     
     def check_base(self):
         if not self.base == self.last_base:
@@ -46,10 +42,6 @@ class EMA(DateSeries):
                             curr_data = self.data[j]
                             j -= 1
                         self.data.append(self.alpha * self.base[i] + self.inv_alpha * curr_data)
-    
-    def __getitem__(self, dateindex):
-        self.check_base()
-        return super().__getitem__(dateindex)
     
     def copy(self):
         return self.__class__(self.base, window_size=None,
