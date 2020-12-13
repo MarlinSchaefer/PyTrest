@@ -6,113 +6,103 @@ from .taxes import TaxFree
 import warnings
 
 class Depot(object):
-    def __init__(self, name='N/A', base_cash=None, currency='USD',
-                 history=None, curr_dateindex=None, tax=None):
+    def __init__(self, name='N/A', cash=None, currency=None,
+                 portfolio=None, tax=None, dateindex=None):
         self.name = str(name)
-        self.cash = Money(base_cash, currency=currency)
-        if history is None:
-            self.history = DepotHistory()
-        elif not isinstance(history, DepotHistory):
-            raise TypeError
+        self.history = DepotHistory()
+        self.portfolio = portfolio if portfolio is not None else Portfolio()
+        self.update_dateindex(dateindex)
+        if cash is None and currency is None:
+            msg = 'A currency must be specified.'
+            raise ValueError(msg)
+        if currency is None:
+            if isinstance(cash, Money):
+                self.cash = cash
+                self.history.cash_event(self.cash, self.dateindex,
+                                        msg='Depot: Initialized Depot with cash')
+                self.currency = self.cash.currency
+            else:
+                raise TypeError
         else:
-            self.history = history
-        self.curr_dateindex = curr_dateindex
-        self.portfolio = Portfolio()
-        self.tax = tax if tax is not None else TaxFree(currency=self.currency)
+            self.currency = currency
+            self.cash = Money(cash).convert(self.currency)
+            self.history.cash_event(self.cash, self.dateindex,
+                                    msg='Depot: Initialized Depot with cash')
+        
+        self.base_positions = {}
+        self.tax = tax if tax is not None else TaxFree()
     
-    @property
-    def currency(self):
-        return self.cash.currency
+    def __contains__(self, item):
+        if isinstance(item, Position):
+            return item in self.portfolio
+    
+    def update_dateindex(self, dateindex):
+        self.dateindex = dateindex
+        self.portfolio.update_dateindex(dateindex)
+    
+    def add_cash(self, cash, dateindex=None):
+        assert cash > 0
+        if dateindex is None:
+            dateindex = self.dateindex
+        cash = Money(cash, currency=self.currency).convert(self.currency)
+        self.cash += cash
+        self.history.cash_event(cash, dateindex, msg='Depot: Added cash')
+    
+    def withdraw_cash(self, cash, dateindex=None):
+        assert cash > 0
+        if dateindex is None:
+            dateindex = self.dateindex
+        cash = Money(cash, currency=self.currency).convert(self.currency)
+        self.cash -= cash
+        self.history.cash_event(cash, dateindex,
+                                msg='Depot: Withdrew cash')
+    
+    def pay_broker(self, cash, dateindex=None, msg=None):
+        if dateindex is None:
+            dateindex = self.dateindex
+        cash = abs(Money(cash, currency=self.currency).convert(self.currency))
+        exe = self.cash >= cash
+        self.cash -= min(self.cash, cash)
+        self.history.cash_event(cash, dateindex, msg=msg)
+        return exe
+    
+    def get_base_position(self, candle_feed):
+        return self.portfolio.get_base_position(candle_feed,
+                                                currency=self.currency)
     
     def value(self, currency=None):
         if currency is None:
             currency = self.currency
-        return self.cash.convert(currency) + self.portfolio.value(currency=currency)
+        port_value = self.portfolio.value(currency=currency)
+        return self.cash.convert(currency) + port_value
     
-    def add_funds(self, funds, dateindex=None):
-        assert funds >= 0
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        self.history.add_funds(funds, dateindex)
-        self.cash += funds
+    def shares(self):
+        return self.portfolio.shares()
     
-    def pay_broker(self, cash, dateindex=None, msg=''):
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        if cash > self.cash:
-            msg = 'Insufficient funds to pay the Broker.'
-            warnings.warn(msg, RuntimeWarning)
-            return False
-        else:
-            self.cash -= cash
-            self.history.pay_broker(cash, dateindex, msg=msg)
-            return True
+    def reduce_position_size(self, position, amount, price=None,
+                             dateindex=None):
+        cash, pos = self.portfolio.reduce_position_size(position,
+                                                        amount,
+                                                        price=price,
+                                                        dateindex=dateindex)
+        taxes = self.tax.on_position_reduce(pos)
+        cash -= taxes
+        self.history.cash_event(taxes, max(pos.history.index),
+                                msg='Depot: Taxes on position reduce')
+        self.cash = self.cash + cash
+        self.history.cash_event(cash, max(pos.history.index),
+                                msg='Depot: Cash from position reduce')
     
-    def withdraw_funds(self, funds, dateindex=None):
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        funds = abs(funds)
-        funds = min(self.cash, funds)
-        self.history.withdraw_funds(funds, dateindex)
-        self.cash -= funds
-        return funds
-    
-    def cash_from_position(self, cash, dateindex=None):
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        self.history.cash_from_position(cash, dateindex)
-        self.cash += cash
-        if self.cash < 0.:
-            msg = 'After handeling the last Position the cash in the '
-            msg += 'Depot {} fell below 0 and is now at {}.'
-            msg = msg.format(self.name, str(self.cash))
-            warnings.warn(msg, RuntimeWarning)
-    
-    def add_position(self, position):
-        assert isinstance(position, Position)
-        self.portfolio.add_position(position)
-    
-    def open_position(self, candle_feed, dateindex=None, amount=1,
-                         position_type='long', currency='USD',
-                         price=None, evaluate_at='low'):
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        pos = Position(candle_feed, dateindex=dateindex, amount=amount,
-                       currency=currency, open_price=price,
-                       evaluate_at=evaluate_at,
-                       position_type=position_type)
-        total_cost = pos.open_price * pos.open_amount
-        taxes = self.tax.on_position_entry(pos)
-        total_cost += taxes
-        if total_cost > self.cash:
-            msg = 'The depot has insufficient cash assigned. Could not '
-            msg += 'open the position.'
-            warnings.warn(msg, RuntimeWarning)
-        else:
-            self.cash_from_position(-total_cost, dateindex=dateindex)
-            self.portfolio.add_position(pos)
-    
-    def close_position(self, position, dateindex=None, price=None):
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        cash_delta = self.portfolio.close_position(position,
-                                                   dateindex=dateindex,
-                                                   price=price)
-        taxes = self.tax.on_position_exit(position)
-        cash_delta -= taxes
-        self.cash_from_position(cash_delta, dateindex=dateindex)
-        self.history.close_position(position, dateindex=dateindex)
-    
-    def reduce_position_size(self, position, amount, dateindex=None,
-                            price=None):
-        if dateindex is None:
-            dateindex = self.curr_dateindex
-        cash_delta = self.portfolio.reduce_position_size(position,
-                                                         amount,
-                                                         dateindex=dateindex,
-                                                         price=price)
-        taxes = self.tax.on_position_reduce(position)
-        cash_delta -= taxes
-        self.cash_from_position(cash_delta, datetime=datetime)
-        self.history.reduce_position_size(position, dateindex)
-    pass
+    def increase_position_size(self, position, amount, price=None,
+                               dateindex=None):
+        cash, pos = self.portfolio.increase_position_size(position,
+                                                          amount,
+                                                          price=price,
+                                                          dateindex=dateindex)
+        taxes = self.tax.on_position_increase(pos)
+        cash -= taxes
+        self.history.cash_event(taxes, max(pos.history.index),
+                                msg='Depot: Taxes on position increase')
+        self.cash = self.cash + cash
+        self.history.cash_event(cash, max(pos.history.index),
+                                msg='Depot: Cash from position increase')

@@ -12,6 +12,9 @@ class CandleFeed(DateSeries):
         self.name = name
         self.currency = currency
     
+    def __hash__(self):
+        return hash(self.name)
+    
     def add_candle(self, dateindex, candle, names=None):
         if isinstance(candle, Candle):
             if candle.currency != self.currency:

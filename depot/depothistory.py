@@ -1,6 +1,15 @@
 from ..types import DateSeries
 
-class DepotHistory(object):
+class DepotHistory(DateSeries):
+    def cash_event(self, cash, dateindex, msg=None):
+        if msg is None:
+            msg = 'Unnamed cashflow'
+        msg = str(msg)
+        if dateindex not in self:
+            self.insert_value(dateindex, value=[])
+        self.loc(dateindex).append([cash, msg])
+
+class DepotHistoryOld(object):
     def __init__(self):
         self.cash_history = DateSeries()
         self.position_history = DateSeries()

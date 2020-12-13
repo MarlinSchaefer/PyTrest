@@ -10,6 +10,9 @@ class BaseTax(object):
     def on_position_reduce(self, position):
         raise NotImplementedError('Function needs to be implemented.')
     
+    def on_position_increase(self, position):
+        raise NotImplementedError('Function needs to be implemented.')
+    
     def on_position_exit(self, position):
         raise NotImplementedError('Function needs to be implemented.')
     
@@ -30,6 +33,9 @@ class TaxFree(BaseTax):
         return self.zero
     
     def on_position_reduce(self, position):
+        return self.zero
+    
+    def on_position_increase(self, position):
         return self.zero
     
     def on_position_exit(self, position):
@@ -63,10 +69,10 @@ class GermanTax(BaseTax):
         return taxes
     
     def on_position_reduce(self, position):
-        hist = position.reduce_history
+        hist = position.history
         dateindex = max(hist.keys())
-        amount = hist[dateindex][0]
-        curr_price = hist[dateindex][1]
+        amount = hist[dateindex][-1][0]
+        curr_price = hist[dateindex][-1][1]
         curr_val = amount * curr_price
         init_val = amount * position.open_price
         if position.position_type == 'long':
@@ -74,6 +80,9 @@ class GermanTax(BaseTax):
         else:
             returns = init_val - curr_val
         return self.calculate_taxes(returns)
+    
+    def on_position_increase(self, position):
+        return self.zero
     
     def on_position_exit(self, position):
         return self.on_position_reduce(position)

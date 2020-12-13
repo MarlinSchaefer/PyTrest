@@ -52,6 +52,17 @@ class Money(object):
                                              end=end_date,
                                              interval='1d')
         
+        if len(data) == 0:
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=3)).date()
+            end_date = (datetime.datetime.now() + datetime.timedelta(days=3)).date()
+            try:
+                data = yf.Ticker(ticker).history(start=start_date,
+                                                 end=end_date,
+                                                 interval='1m')
+            except:
+                data = yf.Ticker(ticker).history(start=start_date,
+                                                 end=end_date,
+                                                 interval='1d')
         idx = np.argmin(np.abs([pt - date.astimezone(pt.tzinfo) for pt in data.index]))
         
         conversion_factor = data.iloc[idx]['Low']

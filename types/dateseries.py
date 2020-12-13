@@ -21,6 +21,12 @@ class DateSeries(object):
             self.head = [0, self.index[0]]
         self.datetime_format = datetime_format
     
+    def __contains__(self, item):
+        if isinstance(item, datetime.datetime):
+            return item in self.index
+        else:
+            return item in self.data
+    
     def __len__(self):
         return len(self.data)
     
@@ -42,25 +48,37 @@ class DateSeries(object):
     
     @property
     def min_dateindex(self):
-        return min(self.index)
+        try:
+            return min(self.index)
+        except:
+            return None
     
     @property
     def max_dateindex(self):
-        return max(self.index)
+        try:
+            return max(self.index)
+        except:
+            return None
     
     def insert_value(self, dateindex, value=None):
-        idx = np.searchsorted(np.array(self.index), dateindex)
-        if idx < len(self.index):
-            if self.index[idx] == dateindex:
-                msg = 'Cannot insert when index is already occupied. '
-                raise IndexError(msg)
+        if len(self.index) == 0:
+            self.index.append(dateindex)
+            self.data.append(value)
+            
+            self.head = [0, self.index[0]]
+        else:
+            idx = np.searchsorted(np.array(self.index), dateindex)
+            if idx < len(self.index):
+                if self.index[idx] == dateindex:
+                    msg = 'Cannot insert when index is already occupied. '
+                    raise IndexError(msg)
         
-        #Check if head needs to be moved
-        if idx < self.head[0]:
-            self.head[0] += 1
-        
-        self.index.insert(idx, dateindex)
-        self.data.insert(idx, value)
+            #Check if head needs to be moved
+            if idx < self.head[0]:
+                self.head[0] += 1
+            
+            self.index.insert(idx, dateindex)
+            self.data.insert(idx, value)
         
     
     def set_head(self, dateindex):

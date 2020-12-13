@@ -1,76 +1,99 @@
-from PyTrest.currency import Money
-from PyTrest.feed import CandleFeed
+from ..currency import Money
+import numpy as np
 
 class BaseConstraint(object):
-    def __init__(self, candle_feed=None):
-        assert isinstance(candle_feed, (CandleFeed, type(None)))
-        self.candle_feed = candle_feed
+    def __init__(self):
+        return
     
-    def check(self, dateindex):
+    def check(self, candle):
+        raise NotImplementedError
+    
+    def update(self):
         raise NotImplementedError
 
-class StopConstraint(BaseConstraint):
-    def __init__(self, candle_feed, stop_price, direction='rising'):
-        super().__init__(candle_feed=candle_feed)
-        assert isinstance(stop_price, (int, float, Money))
-        self.stop_price = stop_price
-        self.direction = direction
-        self.stop_triggered = False
-        self.trigger_date = None
+class BaseLimit(BaseConstraint):
+    def __init__(self, price=None, limit_type='long'):
+        self.limit_type = limit_type
+        self.price = price
     
     @property
-    def direction(self):
-        return self._direction
+    def limit_type(self):
+        return self._limit_type
     
-    @direction.setter
-    def direction(self, direction):
-        if not isinstance(direction, str):
+    @limit_type.setter
+    def limit_type(self, limit_type):
+        if isinstance(limit_type, str):
+            limit_type = limit_type.lower()
+            if limit_type in ['long', 'short']:
+                self._limit_type = limit_type
+            else:
+                raise ValueError
+        else:
             raise TypeError
-        elif direction.lower() not in ['rising', 'falling']:
-            raise ValueError
-        else:
-            self._direction = direction.lower()
     
-    def check(self, dateindex):
-        if self.stop_triggered:
-            if self.trigger_date < dateindex:
-                return True
-            else:
-                return False
-        else:
-            candle = self.candle_feed[dateindex]
-            if self.direction == 'rising':
-                if candle.high >= self.stop_price:
-                    self.stop_triggered = True
-                    self.trigger_date = dateindex
-                    return True
-                else:
-                    return False
-            elif self.direction == 'falling':
-                if candle.low <= self.stop_price:
-                    self.stop_triggered = True
-                    self.trigger_date = dateindex
-                    return True
-                else:
-                    return False
-            else:
-                raise RuntimeError
-
-class LimitConstraint(StopConstraint):
-    def __init__(self, candle_feed, limit_price, direction='rising'):
-        assert isinstance(candle_feed, CandleFeed)
-        self.candle_feed = candle_feed
-        assert isinstance(limit_price, (int, float, Money))
-        self.limit_price = limit_price
-        self.direction = direction
+    @property
+    def price(self):
+        return self._price
     
-    def check(self, dateindex):
-        candle = self.candle_feed[dateindex]
-        if self.direction == 'rising':
-            return self.limit_price >= candle.low
-        elif self.direction == 'falling':
-            return self.limit_price <= candle.high
+    @price.setter
+    def price(self, price):
+        if price is None:
+            if self.limit_type == 'long':
+                self._price = np.inf
+            elif self.limit_type == 'short':
+                self._price = -np.inf
+        else:
+            self._price = Money(price)
+    
+    def check(self, candle):
+        if self.limit_type == 'long':
+            return candle.low < self.price
+        elif self.limit_type == 'short':
+            return candle.high > self.price
+    
+    def update(self):
+        return
 
-class CancelConstraint(BaseConstraint):
-    def check(self, dateindex):
-        return False
+class BaseStop(BaseConstraint):
+    def __init__(self, price=None, stop_type='long'):
+        self.stop_type = stop_type
+        self.price = price
+    
+    @property
+    def stop_type(self):
+        return self._stop_type
+    
+    @stop_type.setter
+    def stop_type(self, stop_type):
+        if isinstance(stop_type, str):
+            stop_type = stop_type.lower()
+            if stop_type in ['long', 'short']:
+                self._stop_type = stop_type
+            else:
+                raise ValueError
+        else:
+            raise TypeError
+    
+    @property
+    def price(self):
+        return self._price
+    
+    @price.setter
+    def price(self, price):
+        if price is None:
+            self._price = None
+        else:
+            self._price = Money(price)
+    
+    def check(self, candle):
+        if self.price is None:
+            return True
+        else:
+            if self.stop_type == 'long':
+                return candle.high >= self.price
+            elif self.stop_type == 'short':
+                return candle.low <= self.price
+    
+    def update(self):
+        return
+    

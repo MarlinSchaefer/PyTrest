@@ -5,11 +5,13 @@ from . import orderhistory as ordhist
 from . import brokercost as bk
 from ..types.priorityQueue import PriorityQueue
 from ..feed import CandleFeed
+from . import broker_filling_strategy as bf
+from ..depot import Position
 
 """
 Broker commands
 -buy(candle_feed, amount, price=None)
--sell(candle_feed, amount, price=None)
+-sell(position, amount, price=None)
 -cancel(orderid, {more orderids})
 -buy_cancel(candle_feed, amount, price=None, orderids=None)
 -sell_cancel(candle_feed, amount, price=None, orderids=None)
@@ -19,26 +21,17 @@ Broker commands
 
 class Broker(object):
     def __init__(self, depots=None, active_depot=None, history=None,
-                 broker_cost=None, tax=None):
+                 broker_cost=None, tax=None, filling_strategy=None):
         self.depots = depots
         self.active_depot = active_depot
         #TODO: Replace the order history with a non-base class once implemented.
         self.history = history if history is not None else ordhist.BaseOrderHistory()
         self.broker_cost = broker_cost if broker_cost is not None else bk.NoBrokerCost()
+        self.filling_strat = filling_strategy if filling_strategy is not None else bf.SimpleFillingStrategy()
         self.order_queue = PriorityQueue()
         self.orders = {}
         self.current_dateindex = None
         self.candle_feeds = {}
-        
-        self.order_function_dict = {"buy": self.process_buy_order,
-                                    "sell": self.process_sell_order,
-                                    "cancel": self.process_cancel_order,
-                                    "buy_cancel": self.process_buy_cancel_order,
-                                    "sell_cancel": self.process_sell_cancel_order,
-                                    "adjust_amount": self.process_adjust_amount_order,
-                                    "drop_from_queue": self.process_drop_from_queue_order
-                                    }
-        return
     
     @property
     def max_order_id(self):
@@ -86,6 +79,9 @@ class Broker(object):
             return self.active_depot
         else:
             return None
+    
+    def get_depot(self, depot):
+        return self.depots[self.get_depot_name(depot)]
     
     def add_depot(self, depot, name=None):
         if isinstance(depot, dep.Depot):
@@ -161,7 +157,7 @@ class Broker(object):
     
     def depots_to_current_date(self):
         for depot in self.depots.values():
-            depot.curr_dateindex = self.current_dateindex
+            depot.update_dateindex(self.current_dateindex)
     
     def advance_time(self, timedelta=None, process_order_queue=True):
         if process_order_queue:
@@ -226,110 +222,49 @@ class Broker(object):
     def process_order_queue(self):
         next_queue = PriorityQueue()
         for (depot, order) in self.order_queue:
-            eval_order = order.evaluate()
-            if eval_order[0] == 'idle':
+            order.update()
+            self.execute_order(depot, order)
+            if order.isCancelled():
+                cancel_cost = self.broker_cost.on_order_cancel(order)
+                exe = self.depots[depot].pay_broker(cancel_cost, msg='Broker: Order cacelled')
+                if not exe:
+                    msg = 'Could not pay broker to cancel the order!'
+                    warnings.warn(msg, RuntimeWarning)
+            if not order.isClosed():
                 next_queue.enqueue((depot, order),
                                    priority=self.current_dateindex)
-            else:
-                if order.order_id is -1:
-                    order_id = self.max_order_id + 1
-                    order.order_id = order_id
-                    self.orders[order_id] = order
-                else:
-                    order_id = order.order_id
-                    if order_id in self.orders:
-                        if not order == self.orders[order_id]:
-                            msg = 'Found existing order with the same '
-                            msg += 'ID. Will assign a new, unique ID.'
-                            warnings.warn(msg, RuntimeWarning)
-                            order_id = self.max_order_id + 1
-                            order.order_id = order_id
-                            self.orders[order_id] = order
-                    else:
-                        self.orders[order_id] = order
-                eval_order[1].update({'order_id': order_id})
-                fill_status = self.order_function_dict[eval_order[0]](depot, order,
-                                                                      **eval_order[1])
-                order.status = fill_status
-                #self.history.add(self.current_dateindex, depot, order)
         self.order_queue = next_queue
     
-    def cancel_order(self, depot, order_id):
-        order = self.orders[order_id]
-        order.status = 'canceled'
-        order.command = 'drop_from_queue'
-        order.arguments.update({'order_status': order.status})
-        cost = self.broker_cost.on_order_cancel(self.order[order_id])
-        exe = depot.pay_broker(cost, msg='Broker: Cancel order {}'.format(order_id))
+    def cancel_order(self, depot, order):
+        depot = self.get_depot(depot)
+        cost = self.broker_cost.on_order_cancel(order)
+        exe = depot.pay_broker(cost, msg='Broker: Cancelled order')
         if not exe:
-            msg = 'Depot {} did not contain sufficient funds to pay the'
-            msg += ' broker for canceling the order {}. The depot was '
-            msg += 'therefore removed from the broker.'
-            msg = msg.format(depot, order_id)
-            warnings.warn(msg, RuntimeWarning)
-            self.remove_depot(depot)
+            warnings.warn('Insufficient funds to cancel order.', RuntimeError)
+        order.cancel()
     
-    ##################
-    #Order processing#
-    ##################
-    def process_buy_order(self, depot, order, **kwargs):
-        depot = self.get_depot_name(depot)
-        cf = kwargs.get('candle_feed', None)
-        if cf is None:
-            msg = 'No CandleFeed provided to this buy order. Will cancel'
-            msg += ' the order.'
-            warnings.warn(msg, RuntimeWarning)
-            self.cancel_order(depot, kwargs.get('order_id'))
-            return "canceled"
-        if cf not in list(self.candle_feeds.values()):
-            msg = 'Trying to buy from unknown CandleFeed {}.'.format(cf)
-            msg += ' Order is canceled.'
-            warnings.warn(msg, RuntimeWarning)
-            self.cancel_order(depot, kwargs.get('order_id'))
-            return "canceled"
-        price = kwargs.get('price', cf.value.high)
-        amount = kwargs.get('amount', None)
-        if not isinstance(amount, int):
-            msg = 'Could not interpret the amount requested by the buy-'
-            msg += 'order. Will cancel the order.'
-            warnings.warn(msg, RuntimeWarning)
-            self.cancel_order(depot, kwargs.get('order_id'))
-            return "canceled"
-        cost = self.broker_cost.on_order_execution(order, price*amount)
-        if self.depots[depot].cash < amount * price + cost:
-            msg = 'The targeted depot {} did not provide enough funds '
-            msg += 'to cover the expenses for the position and the '
-            msg += 'mandatory broker fee. Will cancel the order.'
-            warnings.warn(msg, RuntimeWarning)
-            self.cancel_order(depot, kwargs.get('order_id'))
-            return "canceled"
-        if cost > 0:
-            exe = self.depots[depot].pay_broker(cost, msg='Broker: Order execution {}'.format(kwargs.get('order_id')))
+    def execute_order(self, depot, order):
+        price, quantity = self.filling_strat.execute_order(order)
+        if quantity is None or quantity == 0:
+            return
+        if quantity < order.quantity and order.all_or_nothing:
+            self.cancel_order(depot, order)
+            return
+        depot = self.get_depot(depot)
+        if isinstance(order.target, Position):
+            pos = order.target
         else:
-            exe = True
+            pos = depot.get_base_position(order.target)
         
-        if not exe:
-            raise RuntimeError
+        if not pos in depot:
+            depot.protfolio.add_position(pos)
         
-        self.depots[depot].open_position(cf, dateindex=cf.dateindex,
-                                         amount=amount, price=price,
-                                         position_type=kwargs.get('position_type', 'long'))
-        return "filled"
-    
-    def process_sell_order(self, depot, **kwargs):
-        return "failed"
-    
-    def process_cancel_order(self, depot, **kwargs):
-        return "failed"
-    
-    def process_buy_cancel_order(self, depot, **kwargs):
-        return "failed"
-    
-    def process_sell_cancel_order(self, depot, **kwargs):
-        return "failed"
-    
-    def process_adjust_amount_order(self, depot, **kwargs):
-        return "failed"
-    
-    def process_drop_from_queue_order(self, depot, **kwargs):
-        return kwargs.get('order_status', "failed")
+        if order.isBuyLong():
+            depot.increase_position_size(pos, amount=quantity, price=price)
+        elif order.isSellLong():
+            depot.reduce_position_size(pos, amount=quantity, price=price)
+        elif order.isBuyShort():
+            depot.reduce_position_size(pos, amount=quantity, price=price)
+        elif order.isSellShort():
+            depot.increase_position_size(pos, amount=quantity, price=price)
+        order.fill(quantity)
