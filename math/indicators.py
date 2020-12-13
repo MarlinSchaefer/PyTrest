@@ -58,6 +58,7 @@ class MACDLine(DateSeriesWrapper):
     def check_base(self):
         super().check_base()
         if not self.base == self.last_base:
+            self.head = self.base.head.copy()
             self.last_base = self.base.copy()
             ema_diff = self.ema_fast - self.ema_slow
             self.index = ema_diff.index

@@ -1,7 +1,7 @@
 import datetime as dt
 #import PyTrest.barfeed as bf
 from PyTrest.barfeed import YahooFeed, BaseBarFeed
-from PyTrest.util import format_datetime
+from PyTrest.utils import format_datetime
 
 class BasePosition(object):
     def __init__(self, barfeed, size=0):

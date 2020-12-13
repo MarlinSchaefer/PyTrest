@@ -1,8 +1,25 @@
-from PyTrest.types import DateSeries, Candle
+from PyTrest.types import DateSeries, Candle, DateSeriesWrapper
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import datetime
 import yfinance as yf
+
+class SubFeed(DateSeriesWrapper):
+    def check_base(self):
+        super().check_base()
+        if not self.base == self.last_base:
+            data = self.base.data
+            index = self.base.index
+            head = self.base.head
+            self.data = data
+            self.index = index
+            self.head = head.copy()
+            self.last_base = self.base.copy()
+    
+    #def copy(self):
+        #return SubFeed(self.base, data=self.data.copy(),
+                       #index=self.index.copy(),
+                       #datetime_format=self.datetime_format)
 
 class CandleFeed(DateSeries):
     def __init__(self, name='N/A', currency='USD', data=None, index=None,
@@ -118,6 +135,7 @@ class CandleFeed(DateSeries):
 class YahooFeed(CandleFeed):
     def __init__(self, ticker, currency='USD',
                  datetime_format='%d.%m.%Y %H:%M:%S', **kwargs):
+        ticker_name = str(ticker)
         ticker = yf.Ticker(ticker)
         if 'period' not in kwargs:
             kwargs['period'] = 'max'
@@ -131,5 +149,10 @@ class YahooFeed(CandleFeed):
                                currency=currency,
                                timestamp=index[i],
                                names=names))
-        super().__init__(name=str(ticker), currency=currency, data=data,
+        super().__init__(name=ticker_name, currency=currency, data=data,
                           index=index, datetime_format=datetime_format)
+    
+    #def copy(self):
+        #return CandleFeed(name=self.name, currency=self.currency,
+                          #data=self.data.copy(), index=self.index.copy(),
+                          #datetime_format=self.datetime_format)

@@ -24,7 +24,9 @@ class EMA(DateSeriesWrapper):
     
     def check_base(self):
         if not self.base == self.last_base:
+            self.head = self.base.head
             self.last_base = self.base.copy()
+            #if self.last_base.data != self.base.data:
             self.index = self.base.index.copy()
             self.data = []
             y0_init = False
@@ -42,6 +44,7 @@ class EMA(DateSeriesWrapper):
                             curr_data = self.data[j]
                             j -= 1
                         self.data.append(self.alpha * self.base[i] + self.inv_alpha * curr_data)
+            
     
     def copy(self):
         return self.__class__(self.base, window_size=None,

@@ -1,5 +1,5 @@
 import yfinance as yf
-from PyTrest.util import format_datetime
+from PyTrest.utils import format_datetime
 from PyTrest.currency import Money
 
 class BaseBarFeed(object):
