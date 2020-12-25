@@ -1,7 +1,7 @@
 import numpy as np
 import warnings
 import datetime
-from ..types.dateseries_synced import DateSeries
+from ..types.dateseries import DateSeries
 
 class MovingWindowOperation(DateSeries):
     def __init__(self, parent, min_size=None, max_size=None, **kwargs):

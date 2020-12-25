@@ -1,6 +1,6 @@
-from ..types.dateseries_synced import DateSeries
-from .moving_window_synced import SMA
-from .moving_averages_synced import EMA, DMA
+from ..types.dateseries import DateSeries
+from .moving_window import SMA
+from .moving_averages import EMA, DMA
 
 class DualBaseWrapper(object):
     def __init__(self, base1, base2):

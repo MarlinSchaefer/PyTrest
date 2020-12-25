@@ -1,5 +1,6 @@
 import warnings
-from ..types.dateseries_synced import DateSeries
+from ..types.dateseries import DateSeries
+import datetime
 
 class EMA(DateSeries):
     def __init__(self, parent, window_size=None, alpha=None, **kwargs):
