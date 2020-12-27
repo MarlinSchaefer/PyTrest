@@ -1,18 +1,10 @@
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from .events import EventManager, EventHandler
 
 class DateSeries(object):
-    manager = EventManager()
-    def __init__(self, parent=None, data=None, index=None,
+    def __init__(self, data=None, index=None,
                  datetime_format='%d.%m.%Y %H:%M:%S'):
-        self.parent = parent
-        if self.parent is None:
-            self.handler = EventHandler()
-        else:
-            self.handler = parent.handler
-        
         #head = Read-head [index position, datetime]
         if data is None:
             self.data = []
@@ -28,7 +20,6 @@ class DateSeries(object):
         else:
             self.head = [0, self.index[0]]
         self.datetime_format = datetime_format
-        self.handler.listen('set_head', self.set_head_action)
     
     def __contains__(self, item):
         if isinstance(item, datetime.datetime):
@@ -38,14 +29,6 @@ class DateSeries(object):
     
     def __len__(self):
         return len(self.data)
-    
-    def is_parent(self, dateseries):
-        self_parent = dateseries is self.parent
-        if self.parent is None:
-            parent_parent = False
-        else:
-            parent_parent = self.parent.is_parent(dateseries)
-        return self_parent or parent_parent
     
     @property
     def value(self):
@@ -77,7 +60,6 @@ class DateSeries(object):
         except:
             return None
     
-    @manager.send('insert_value')
     def insert_value(self, dateindex, value=None):
         if len(self.index) == 0:
             self.index.append(dateindex)
@@ -98,7 +80,7 @@ class DateSeries(object):
             self.index.insert(idx, dateindex)
             self.data.insert(idx, value)
         
-    @manager.send('set_head')
+    
     def set_head(self, dateindex):
         idx = np.searchsorted(np.array(self.index), dateindex)
         if not self.index[idx] == dateindex:
@@ -106,47 +88,24 @@ class DateSeries(object):
         self.head = [idx, dateindex]
         return True
     
-    def set_head_silent(self, dateindex):
-        idx = np.searchsorted(np.array(self.index), dateindex)
-        if not self.index[idx] == dateindex:
-            return False
-        self.head = [idx, dateindex]
-        return True
-    
-    def set_head_action(self, event):
-        if event.emitter is self:
-            return
-        if not self.is_parent(event.emitter):
-            return
-        dateindex = event.args[1]
-        idx = np.searchsorted(np.array(self.index), dateindex)
-        if not self.index[idx] == dateindex:
-            return
-        self.head = [idx, dateindex]
-    
     def set_head_closest(self, dateindex):
         idx = np.searchsorted(np.array(self.index), dateindex)
         idx += np.argmin(np.abs([self.index[idx]-dateindex,
                                  self.index[idx+1]-dateindex]))
-        self.set_head(self.index[idx])
-    
-    def set_head_closest_silent(self, dateindex):
-        idx = np.searchsorted(np.array(self.index), dateindex)
-        idx += np.argmin(np.abs([self.index[idx]-dateindex,
-                                 self.index[idx+1]-dateindex]))
-        self.set_head_silent(self.index[idx])
+        self.head = [idx, self.index[idx]]
     
     def set_head_or_prior(self, dateindex):
         if dateindex in self.index:
             self.set_head(dateindex)
         else:
             idx = np.searchsorted(np.array(self.index), dateindex)
-            self.set_head(self.index[idx-1])
+            self.head = [idx-1, self.index[idx-1]]
     
     def __next__(self):
         if self.head[0] >= len(self) - 1:
             raise StopIteration()
-        self.set_head(self.index[self.head[0]+1])
+        self.head[0] += 1
+        self.head[1] = self.index[self.head[0]]
         return self.value
     
     def next_date(self):
@@ -170,7 +129,8 @@ class DateSeries(object):
                     timeindex = len(self) - self.head[0]
                 else:
                     raise IndexError(idxmsg)
-            self.set_head(self.index[self.head[0]+timeindex])
+            self.head[0] += timeindex
+            self.head[1] = self.index[self.head[0]]
             return True
         elif isinstance(timeindex, datetime.timedelta):
             if timeindex < datetime.timedelta(seconds=0):
@@ -222,9 +182,9 @@ class DateSeries(object):
     def loc(self, dateindex, use_closest=False):
         original_head = self.head.copy()
         if use_closest:
-            self.set_head_closest_silent(dateindex)
+            self.set_head_closest(dateindex)
         else:
-            success = self.set_head_silent(dateindex)
+            success = self.set_head(dateindex)
             if not success:
                 msg = 'Datetime {} is not contained in the index.'
                 msg = msg.format(dateindex)
@@ -347,50 +307,6 @@ class DateSeries(object):
             return self.loc(dateindex)
         raise TypeError('Unrecognized type.')
     
-    @manager.send('__setitem__')
-    def __setitem__(self, dateindex, value):
-        if isinstance(dateindex, slice):
-            start, stop, step = self.sanitize_slice(dateindex)
-            
-            #Loop over the slice
-            ret = []
-            ind = []
-            if isinstance(start, int):
-                if step is None:
-                    step = 1
-                for i in range(start, stop, step):
-                    self.data[i] = value
-            elif isinstance(start, datetime.datetime):
-                curr = min(start, stop)
-                step = abs(step)
-                while curr < max(start, stop):
-                    if curr in self.index:
-                        i = self.index.index(curr)
-                    else:
-                        continue
-                    self.data[i] = value
-                    curr += step
-            else:
-                msg = 'Uncaught type-error with (start, stop, step) = '
-                msg += '({}, {}, {}).'.format(start, stop, step)
-                raise RuntimeError(msg)
-                pass
-            self.data
-            return
-        elif isinstance(dateindex, int):
-            self.data[dateindex] = value
-            return
-        elif isinstance(dateindex, str):
-            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
-        if isinstance(dateindex, datetime.datetime):
-            if dateindex in self.index:
-                i = self.index.index(dateindex)
-            else:
-                raise ValueError('Dateindex {} not in DateSeries.'.format(dateindex))
-            self.data[i] = value
-            return
-        raise TypeError('Unrecognized type.')
-    
     def as_list(self):
         return self.data
     
@@ -427,6 +343,7 @@ class DateSeries(object):
     #All math functionality
     def binary_operation(self, other, function_name):
         if isinstance(other, DateSeries):
+            #print("Other is DateSeries, Trying to call function {}".format(function_name))
             index = []
             data = []
             for dateindex in self.index:

@@ -43,11 +43,14 @@ class Money(object):
             ticker = currency.upper() + '=X'
         else:
             ticker = self.currency + currency.upper() + '=X'
+        #if abs(datetime.date.today() - start_date) > datetime.timedelta(days=30):
         try:
             data = yf.Ticker(ticker).history(start=start_date,
                                              end=end_date,
                                              interval='1m')
+        #else:
         except:
+            print("In first except")
             data = yf.Ticker(ticker).history(start=start_date,
                                              end=end_date,
                                              interval='1d')
@@ -60,6 +63,7 @@ class Money(object):
                                                  end=end_date,
                                                  interval='1m')
             except:
+                print("In except")
                 data = yf.Ticker(ticker).history(start=start_date,
                                                  end=end_date,
                                                  interval='1d')

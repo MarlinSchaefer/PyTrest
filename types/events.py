@@ -86,6 +86,44 @@ class EventHandler(object):
             return False
         return True
 
+class EventMultiHandler():
+    def __init__(self, handlers=None):
+        if handlers is None:
+            self.handlers = []
+        else:
+            self.handlers = handlers
+        self.events = 0
+    
+    def send(self, event_tag):
+        for handler in self.handlers:
+            if event_tag not in handler.subscriptions:
+                handler.subscriptions[event_tag] = []
+        
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper_decorator(*args, **kwargs):
+                self.events += 1
+                event = Event(event_tag=event_tag,
+                              emitter=args[0],
+                              event_id=self.events,
+                              args=args,
+                              kwargs=kwargs
+                             )
+                ret = func(*args, **kwargs)
+                for handler in self.handlers:
+                    handler.handle_event(event)
+                return ret
+            return wrapper_decorator
+        return decorator
+    
+    def listen(self, event_tag, func):
+        for handler in self.handlers:
+            handler.listen(event_tag, func)
+    
+    def stop_listen(self, event_tag, func):
+        for handler in self.handlers:
+            handler.stop_listen(event_tag, func)
+
 class EventManager(object):
     def send(self, event_tag=None):
         def decorator(func):

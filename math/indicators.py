@@ -1,11 +1,15 @@
 from ..types.dateseries import DateSeries
 from .moving_window import SMA
 from .moving_averages import EMA, DMA
+from ..types.events import EventMultiHandler
 
 class DualBaseWrapper(object):
     def __init__(self, base1, base2):
         self.base1 = base1
         self.base2 = base2
+        handlers = [self.base1.handler, self.base2.handler]
+        self.handler = EventMultiHandler(handlers=handlers)
+        self.handler.listen('set_head', self.set_head_action)
     
     def __len__(self):
         return len(self.base1)
@@ -24,14 +28,19 @@ class DualBaseWrapper(object):
         except:
             return self.base2.index
     
-    def check_base(self):
-        pt1 = NotImplemented
-        if hasattr(self.base1, 'check_base'):
-            pt1 = self.base1.check_base()
-        pt2 = NotImplemented
-        if hasattr(self.base2, 'check_base'):
-            pt2 = self.base2.check_base()
-        return (pt1, pt2)
+    def set_head_action(self, event):
+        dateindex = event.args[1]
+        if event.emitter is self.base1:
+            if self.base2.dateindex == dateindex:
+                return
+            self.base2.set_head(dateindex)
+        elif event.emitter is self.base2:
+            if self.base1.dateindex == dateindex:
+                return
+            self.base1.set_head(dateindex)
+    
+    def is_parent(self, dateseries):
+        return self.base1.is_parent(dateseries) or self.base2.is_parent(dateseries)
     
     def copy(self):
         return self.__class__(self.base1.copy(),
@@ -102,54 +111,67 @@ class MACDSignal(EMA):
                               index=self.index.copy(),
                               datetime_format=self.datetime_format)
 
-#class Crossover(DateSeriesWrapper):
-    #def __init__(self, part1, part2, from_above=True, from_below=True,
-                 #**kwargs):
-        #self.part1 = part1
-        #self.part2 = part2
-        #self.from_above = from_above
-        #self.from_below = from_below
-        #super().__init__(DualBaseWrapper(self.part1,
-                                         #self.part2), **kwargs)
+class Crossover(DateSeries):
+    def __init__(self, part1, part2, from_above=True, from_below=True,
+                 **kwargs):
+        self.part1 = part1
+        self.part2 = part2
+        self.from_above = from_above
+        self.from_below = from_below
+        super().__init__(DualBaseWrapper(self.part1,
+                                         self.part2), **kwargs)
+        self.handler.listen('__setitem__', self.setitem_action)
+        self.handler.listen('set_head', self.set_head_action)
+        self.recalculate()
     
-    #def check_base(self):
-        #super().check_base()
-        #if not self.last_base == self.base:
-            #self.last_base = self.base.copy()
-            #from_above = False
-            #if self.from_above:
-                #tmp = self.part1 > self.part2
-                #data = []
-                #for i in range(len(tmp)):
-                    #if i == 0:
-                        #data.append(False)
-                    #else:
-                        #data.append(tmp[i-1] and not tmp[i])
-                #from_above = DateSeries(data=data, index=tmp.index,
-                                        #datetime_format=tmp.datetime_format)
-            #from_below = False
-            #if self.from_below:
-                #tmp = self.part1 < self.part2
-                #data = []
-                #for i in range(len(tmp)):
-                    #if i == 0:
-                        #data.append(False)
-                    #else:
-                        #data.append(tmp[i-1] and not tmp[i])
-                #from_below = DateSeries(data=data, index=tmp.index,
-                                        #datetime_format=tmp.datetime_format)
-            #combined = from_above or from_below
-            #if not isinstance(combined, DateSeries):
-                #return DateSeries(data=[False for _ in range(len(tmp))],
-                                  #index=tmp.index,
-                                  #datetime_format=tmp.datetime_format)
-            #self.index = combined.index
-            #self.data = combined.data
+    def recalculate(self):
+        from_above = False
+        if self.from_above:
+            tmp = self.part1 > self.part2
+            data = []
+            for i in range(len(tmp)):
+                if i == 0:
+                    data.append(False)
+                else:
+                    data.append(tmp.iloc(i-1) and not tmp.iloc(i))
+            from_above = DateSeries(data=data, index=tmp.index,
+                                    datetime_format=tmp.datetime_format)
+        from_below = False
+        if self.from_below:
+            tmp = self.part1 < self.part2
+            data = []
+            for i in range(len(tmp)):
+                if i == 0:
+                    data.append(False)
+                else:
+                    data.append(tmp[i-1] and not tmp[i])
+            from_below = DateSeries(data=data, index=tmp.index,
+                                    datetime_format=tmp.datetime_format)
+        combined = from_above or from_below
+        if not isinstance(combined, DateSeries):
+            tmp = self.parent
+            combined = DateSeries(data=[False for _ in range(len(tmp))],
+                                  index=tmp.index,
+                                  datetime_format=tmp.datetime_format)
+        
+        for dateindex, data_pt in zip(combined.index, combined.data):
+            if dateindex not in self:
+                self.insert_value(dateindex, value=data_pt)
+            else:
+                self[dateindex] = data_pt
     
-    #def copy(self):
-        #return self.__class__(self.part1, self.part2,
-                              #from_above=self.from_above,
-                              #from_below=self.from_below,
-                              #data=self.data.copy(),
-                              #index=self.index.copy(),
-                              #datetime_format=self.datetime_format)
+    def setitem_action(self, event):
+        if self.parent.is_parent(event.emitter):
+            self.recalculate()
+    
+    def set_head_action(self, event):
+        if self.parent.is_parent(event.emitter):
+            self.recalculate()
+    
+    def copy(self):
+        return self.__class__(self.part1, self.part2,
+                              from_above=self.from_above,
+                              from_below=self.from_below,
+                              data=self.data.copy(),
+                              index=self.index.copy(),
+                              datetime_format=self.datetime_format)

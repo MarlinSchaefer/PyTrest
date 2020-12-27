@@ -4,6 +4,7 @@ from ..currency import Money
 from .position import Position
 from .taxes import TaxFree
 import warnings
+import datetime
 
 class Depot(object):
     def __init__(self, name='N/A', cash=None, currency=None,
@@ -37,6 +38,8 @@ class Depot(object):
             return item in self.portfolio
     
     def update_dateindex(self, dateindex):
+        if dateindex is None:
+            dateindex = datetime.datetime.now()
         self.dateindex = dateindex
         self.portfolio.update_dateindex(dateindex)
     

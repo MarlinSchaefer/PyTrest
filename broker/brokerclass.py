@@ -55,6 +55,14 @@ class Broker(object):
             return max(order_ids)
     
     @property
+    def min_dateindex(self):
+        return max([cf.min_dateindex for cf in self.candle_feeds.values()])
+    
+    @property
+    def max_dateindex(self):
+        return max([cf.max_dateindex for cf in self.candle_feeds.values()])
+    
+    @property
     def depots(self):
         return self._depots
     
