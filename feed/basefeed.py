@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import datetime
 import yfinance as yf
+import h5py
+import numpy as np
 
 class SubFeed(DateSeries):
     def __init__(self, candle_attribute='open', **kwargs):
@@ -136,6 +138,69 @@ class CandleFeed(DateSeries):
                                    height,
                                    color=color))
         return fig, ax
+    
+    def save(self, file_path):
+        with h5py.File(file_path, 'w') as fp:
+            fp.attrs['name'] = self.name
+            fp.attrs['currency'] = self.currency
+            fp.attrs['datetime_format'] = self.datetime_format
+            dates = [pt.strftime(self.datetime_format) for pt in self.index]
+            fp.create_dataset('index', data=np.array(dates, dtype='S'))
+            data = fp.create_group('data')
+            for date in self.index:
+                date_gr = data.create_group(date.strftime(self.datetime_format))
+                candle = self[date]
+                store_dict = candle.as_dict()
+                for key, val in store_dict['attrs'].items():
+                    if key == 'timestamp':
+                        if val is None:
+                            date_gr.attrs[key] = 'None'
+                        else:
+                            date_gr.attrs[key] = val.strftime(self.datetime_format)
+                    else:
+                        date_gr.attrs[key] = val
+                for key, val in store_dict['data'].items():
+                    curr_set = date_gr.create_dataset(key, data=np.float(val))
+    
+    @classmethod
+    def from_save(cls, file_path):
+        with h5py.File(file_path, 'r') as fp:
+            name = fp.attrs['name']
+            cur = fp.attrs['currency']
+            df = fp.attrs['datetime_format']
+            tmp = fp['index'][()].astype(str)
+            index = [datetime.datetime.strptime(pt, df) for pt in tmp]
+            data = []
+            for datestr in tmp:
+                candle_data = fp['data'][datestr]
+                kwargs = {}
+                for key, val in dict(candle_data.attrs).items():
+                    key = str(key)
+                    if key == 'names_keys':
+                        names_keys = val
+                    elif key == 'names_vals':
+                        names_vals = val
+                    elif key == 'required_keys':
+                        continue
+                    elif key == 'timestamp':
+                        if str(val) == 'None':
+                            kwargs[key] = None
+                        else:
+                            kwargs[key] = datetime.datetime.strptime(str(val), df)
+                    else:
+                        kwargs[key] = val
+                kwargs['names'] = {key: val for (key, val) in zip(names_keys, names_vals)}
+                    
+                candle = {}
+                for key in candle_data.keys():
+                    candle[key] = candle_data[key][()]
+                kwargs['data'] = candle
+                data.append(Candle(**kwargs))
+            return CandleFeed(name=name,
+                              currency=cur,
+                              datetime_format=df,
+                              index=index,
+                              data=data)
 
 class YahooFeed(CandleFeed):
     def __init__(self, ticker, currency='USD',

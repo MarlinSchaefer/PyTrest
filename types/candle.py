@@ -149,6 +149,23 @@ class Candle(object):
         
         return list(set(self_keys).intersection(set(other_keys)))
     
+    def as_dict(self):
+        name_keys = []
+        name_vals = []
+        for key, val in self.names.items():
+            name_keys.append(key)
+            name_vals.append(val)
+        attrs = {'required_keys': np.array(self.required_keys, dtype='S'),
+                 'names_keys': np.array(name_keys, dtype='S'),
+                 'names_vals': np.array(name_vals, dtype='S'),
+                 'timestamp': self.timestamp,
+                 'currency': self.currency
+                }
+        ret = {}
+        ret['attrs'] = attrs
+        ret['data'] = self.data
+        return ret
+    
     #All math operations
     def binary_operator(self, other, function_name):
         if isinstance(other, type(self)):
