@@ -1,25 +1,25 @@
-from PyTrest.types import DateSeries, Candle, DateSeriesWrapper
+from PyTrest.types import DateSeries, Candle
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import datetime
 import yfinance as yf
 
-class SubFeed(DateSeriesWrapper):
-    def check_base(self):
-        super().check_base()
-        if not self.base == self.last_base:
-            data = self.base.data
-            index = self.base.index
-            head = self.base.head
-            self.data = data
-            self.index = index
-            self.head = head.copy()
-            self.last_base = self.base.copy()
+class SubFeed(DateSeries):
+    def __init__(self, candle_attribute='open', **kwargs):
+        super().__init__(**kwargs)
+        self.candle_attribute = candle_attribute
+        self.handler.listen('insert_value', self.insert_value_action)
     
-    #def copy(self):
-        #return SubFeed(self.base, data=self.data.copy(),
-                       #index=self.index.copy(),
-                       #datetime_format=self.datetime_format)
+    def insert_value_action(self, event):
+        if event.emitter is self.parent:
+            dateindex = event.args[1]
+            if 'value' in kwargs:
+                candle = kwargs['value']
+            else:
+                candle = args[2]
+            print(f"SubFeed for {self.parent.name}.{self.candle_attribute} received valid insert_value")
+            self.insert_value(dateindex,
+                              value=getattr(candle, self.candle_attribute))
 
 class CandleFeed(DateSeries):
     def __init__(self, name='N/A', currency='USD', data=None, index=None,
@@ -54,40 +54,45 @@ class CandleFeed(DateSeries):
         data = []
         for candle in self.data:
             data.append(candle.open)
-        return DateSeries(data=data, index=self.index,
-                          datetime_format=self.datetime_format)
+        return SubFeed(data=data, index=self.index,
+                       datetime_format=self.datetime_format,
+                       parent=self, candle_attribute='open')
     
     @property
     def close(self):
         data = []
         for candle in self.data:
             data.append(candle.close)
-        return DateSeries(data=data, index=self.index,
-                          datetime_format=self.datetime_format)
+        return SubFeed(data=data, index=self.index,
+                       datetime_format=self.datetime_format,
+                       parent=self, candle_attribute='close')
     
     @property
     def high(self):
         data = []
         for candle in self.data:
             data.append(candle.high)
-        return DateSeries(data=data, index=self.index,
-                          datetime_format=self.datetime_format)
+        return SubFeed(data=data, index=self.index,
+                       datetime_format=self.datetime_format,
+                       parent=self, candle_attribute='high')
     
     @property
     def low(self):
         data = []
         for candle in self.data:
             data.append(candle.low)
-        return DateSeries(data=data, index=self.index,
-                          datetime_format=self.datetime_format)
+        return SubFeed(data=data, index=self.index,
+                       datetime_format=self.datetime_format,
+                       parent=self, candle_attribute='low')
     
     @property
     def volume(self):
         data = []
         for candle in self.data:
             data.append(candle.volume)
-        return DateSeries(data=data, index=self.index,
-                          datetime_format=self.datetime_format)
+        return SubFeed(data=data, index=self.index,
+                       datetime_format=self.datetime_format,
+                       parent=self, candle_attribute='volume')
     vol = volume
     
     @classmethod

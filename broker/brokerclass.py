@@ -265,13 +265,18 @@ class Broker(object):
         order.cancel()
     
     def execute_order(self, depot, order):
+        depot = self.get_depot(depot)
         price, quantity = self.filling_strat.execute_order(order)
+        
         if quantity is None or quantity == 0:
             return
         if quantity < order.quantity and order.all_or_nothing:
             self.cancel_order(depot, order)
             return
-        depot = self.get_depot(depot)
+        cost = self.broker_cost.on_order_execution(order, price)
+        exe = depot.pay_broker(cost, msg='Broker: On order execution')
+        if not exe:
+            return
         if isinstance(order.target, Position):
             pos = order.target
         else:

@@ -55,6 +55,7 @@ class GermanTax(BaseTax):
         self.tax_rate = tax_rate
         self.tax_free_money = Money(0., currency='EUR')
         self.zero = Money(0., currency='EUR')
+        self.last_tax_year = None
     
     def on_position_entry(self, position):
         return self.zero
@@ -70,9 +71,9 @@ class GermanTax(BaseTax):
     
     def on_position_reduce(self, position):
         hist = position.history
-        dateindex = max(hist.keys())
-        amount = hist[dateindex][-1][0]
-        curr_price = hist[dateindex][-1][1]
+        dateindex = hist.max_dateindex
+        amount = hist[dateindex][-1][0][0]
+        curr_price = hist[dateindex][-1][0][1]
         curr_val = amount * curr_price
         init_val = amount * position.open_price
         if position.position_type == 'long':
@@ -91,6 +92,14 @@ class GermanTax(BaseTax):
         return self.zero
     
     def on_update(self, date, positions):
+        if date is None:
+            return self.zero
+        if self.last_tax_year is None:
+            self.last_tax_year = date.year
+            self.tax_free_money = Money(801., currency='EUR')
+        elif self.last_tax_year < date.year:
+            self.last_tax_year = date.year
+            self.tax_free_money = Money(801., currency='EUR')
         return self.zero
     
     def on_dividend(self, dividend):

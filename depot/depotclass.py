@@ -12,6 +12,7 @@ class Depot(object):
         self.name = str(name)
         self.history = DepotHistory()
         self.portfolio = portfolio if portfolio is not None else Portfolio()
+        self.tax = tax if tax is not None else TaxFree()
         self.update_dateindex(dateindex)
         if cash is None and currency is None:
             msg = 'A currency must be specified.'
@@ -31,13 +32,14 @@ class Depot(object):
                                     msg='Depot: Initialized Depot with cash')
         
         self.base_positions = {}
-        self.tax = tax if tax is not None else TaxFree()
     
     def __contains__(self, item):
         if isinstance(item, Position):
             return item in self.portfolio
     
     def update_dateindex(self, dateindex):
+        all_positions = self.portfolio.positions + list(self.portfolio.base_positions.values())
+        self.tax.on_update(dateindex, all_positions)
         if dateindex is None:
             dateindex = datetime.datetime.now()
         self.dateindex = dateindex

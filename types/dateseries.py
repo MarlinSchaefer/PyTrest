@@ -40,12 +40,7 @@ class DateSeries(object):
         return len(self.data)
     
     def is_parent(self, dateseries):
-        self_parent = dateseries is self.parent
-        if self.parent is None:
-            parent_parent = False
-        else:
-            parent_parent = self.parent.is_parent(dateseries)
-        return self_parent or parent_parent
+        return dateseries is self.parent
     
     @property
     def value(self):
@@ -119,10 +114,11 @@ class DateSeries(object):
         if not self.is_parent(event.emitter):
             return
         dateindex = event.args[1]
-        idx = np.searchsorted(np.array(self.index), dateindex)
-        if not self.index[idx] == dateindex:
-            return
-        self.head = [idx, dateindex]
+        self.set_head(dateindex)
+        #idx = np.searchsorted(np.array(self.index), dateindex)
+        #if not self.index[idx] == dateindex:
+            #return
+        #self.head = [idx, dateindex]
     
     def set_head_closest(self, dateindex):
         idx = np.searchsorted(np.array(self.index), dateindex)

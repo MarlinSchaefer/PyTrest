@@ -1,9 +1,10 @@
 from ..types.dateseries import DateSeries
 from .moving_window import SMA
 from .moving_averages import EMA, DMA
-from ..types.events import EventMultiHandler
+from ..types.events import EventMultiHandler, EventManager
 
 class DualBaseWrapper(object):
+    manager = EventManager()
     def __init__(self, base1, base2):
         self.base1 = base1
         self.base2 = base2
@@ -27,20 +28,23 @@ class DualBaseWrapper(object):
             return self.base1.index
         except:
             return self.base2.index
-    
+        
     def set_head_action(self, event):
         dateindex = event.args[1]
-        if event.emitter is self.base1:
-            if self.base2.dateindex == dateindex:
-                return
-            self.base2.set_head(dateindex)
-        elif event.emitter is self.base2:
-            if self.base1.dateindex == dateindex:
-                return
+        if event.emitter in [self.base1, self.base2]:
+            self.set_head(dateindex)
+    
+    @manager.send('set_head')
+    def set_head(self, dateindex):
+        if self.base1.dateindex != dateindex:
             self.base1.set_head(dateindex)
+        if self.base2.dateindex != dateindex:
+            self.base2.set_head(dateindex)
     
     def is_parent(self, dateseries):
-        return self.base1.is_parent(dateseries) or self.base2.is_parent(dateseries)
+        own_parent = (dateseries is self.base1) or (dateseries is self.base2)
+        parent_parent = (self.base1.is_parent(dateseries)) or (self.base2.is_parent(dateseries))
+        return own_parent or parent_parent
     
     def copy(self):
         return self.__class__(self.base1.copy(),
@@ -118,11 +122,19 @@ class Crossover(DateSeries):
         self.part2 = part2
         self.from_above = from_above
         self.from_below = from_below
-        super().__init__(DualBaseWrapper(self.part1,
-                                         self.part2), **kwargs)
+        parent = DualBaseWrapper(self.part1, self.part2)
+        super().__init__(parent=parent, **kwargs)
         self.handler.listen('__setitem__', self.setitem_action)
-        self.handler.listen('set_head', self.set_head_action)
         self.recalculate()
+    
+    #def set_head_action(self, event):
+        #print("!!!Custom set head in dual base")
+        #if event.emitter is self:
+            #return
+        #if not self.is_parent(event.emitter):
+            #return
+        #dateindex = event.args[1]
+        #self.set_head(dateindex)
     
     def recalculate(self):
         from_above = False
@@ -164,9 +176,9 @@ class Crossover(DateSeries):
         if self.parent.is_parent(event.emitter):
             self.recalculate()
     
-    def set_head_action(self, event):
-        if self.parent.is_parent(event.emitter):
-            self.recalculate()
+    #def set_head_action(self, event):
+        #if self.parent.is_parent(event.emitter):
+            #self.recalculate()
     
     def copy(self):
         return self.__class__(self.part1, self.part2,
