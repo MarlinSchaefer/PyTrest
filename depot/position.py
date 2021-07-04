@@ -43,6 +43,8 @@ class Position(object):
             else:
                 self.open_price = Money(open_price,
                                         currency=self.currency)
+        self.record_history(self.open_date, self.open_amount,
+                            self.open_price, msg='Size increase')
         
         if not isinstance(position_type, str):
             raise TypeError
@@ -122,8 +124,8 @@ class Position(object):
     def returns(self):
         if not self.initiated:
             return Money(0., currency=self.currency)
-        start_value = self.open_amount * self.open_price
-        current_size = self.open_amount
+        start_value = self.open_amount * self.open_price * 0
+        current_size = self.open_amount * 0
         sold_value = 0.
         for dateindex in self.history.index:
             pos_changes = self.history.loc(dateindex)

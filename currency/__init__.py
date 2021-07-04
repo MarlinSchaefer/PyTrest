@@ -1,1 +1,1 @@
-from PyTrest.currency.currency import *
+from .currency import *

@@ -6,3 +6,5 @@ from PyTrest import types
 from PyTrest import feed
 from PyTrest import math
 from PyTrest import backtesting
+from PyTrest import analysis
+from PyTrest import strategy

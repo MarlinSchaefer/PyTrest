@@ -5,6 +5,8 @@ import datetime
 import yfinance as yf
 import h5py
 import numpy as np
+import pandas
+import os
 
 class SubFeed(DateSeries):
     def __init__(self, candle_attribute='open', **kwargs):
@@ -97,6 +99,18 @@ class CandleFeed(DateSeries):
                        parent=self, candle_attribute='volume')
     vol = volume
     
+    def to_dataframe(self):
+        length = 0
+        data = {}
+        for candle in self.data:
+            for key, val in candle.data.items():
+                if key not in data:
+                    data[key] = [np.nan for _ in range(length)]
+                data[key].append(float(val))
+            length += 1
+        df = pandas.DataFrame(data=data, index=self.index)
+        return df
+    
     @classmethod
     def from_dataframe(cls, dataframe, name='N/A', currency='USD',
                        datetime_format='%d.%m.%Y %H:%M:%S', names=None):
@@ -139,74 +153,35 @@ class CandleFeed(DateSeries):
                                    color=color))
         return fig, ax
     
-    def save(self, file_path):
-        with h5py.File(file_path, 'w') as fp:
-            fp.attrs['name'] = self.name
-            fp.attrs['currency'] = self.currency
-            fp.attrs['datetime_format'] = self.datetime_format
-            dates = [pt.strftime(self.datetime_format) for pt in self.index]
-            fp.create_dataset('index', data=np.array(dates, dtype='S'))
-            data = fp.create_group('data')
-            for date in self.index:
-                date_gr = data.create_group(date.strftime(self.datetime_format))
-                candle = self[date]
-                store_dict = candle.as_dict()
-                for key, val in store_dict['attrs'].items():
-                    if key == 'timestamp':
-                        if val is None:
-                            date_gr.attrs[key] = 'None'
-                        else:
-                            date_gr.attrs[key] = val.strftime(self.datetime_format)
-                    else:
-                        date_gr.attrs[key] = val
-                for key, val in store_dict['data'].items():
-                    curr_set = date_gr.create_dataset(key, data=np.float(val))
+    def save(self, file_path, overwrite=True):
+        if os.path.isfile(file_path) and not overwrite:
+            raise IOError(f'File {file_path} already exists. Use overwrite to overwrite it.')
+        with pandas.HDFStore(file_path, 'w') as store:
+            store['df'] = self.to_dataframe()
+            aux_info = pandas.DataFrame({'name': [self.name],
+                                         'currency': [self.currency],
+                                         'datetime_format': [self.datetime_format]})
+            store['aux_info'] = aux_info
     
     @classmethod
-    def from_save(cls, file_path):
-        with h5py.File(file_path, 'r') as fp:
-            name = fp.attrs['name']
-            cur = fp.attrs['currency']
-            df = fp.attrs['datetime_format']
-            tmp = fp['index'][()].astype(str)
-            index = [datetime.datetime.strptime(pt, df) for pt in tmp]
-            data = []
-            for datestr in tmp:
-                candle_data = fp['data'][datestr]
-                kwargs = {}
-                for key, val in dict(candle_data.attrs).items():
-                    key = str(key)
-                    if key == 'names_keys':
-                        names_keys = val
-                    elif key == 'names_vals':
-                        names_vals = val
-                    elif key == 'required_keys':
-                        continue
-                    elif key == 'timestamp':
-                        if str(val) == 'None':
-                            kwargs[key] = None
-                        else:
-                            kwargs[key] = datetime.datetime.strptime(str(val), df)
-                    else:
-                        kwargs[key] = val
-                kwargs['names'] = {key: val for (key, val) in zip(names_keys, names_vals)}
-                    
-                candle = {}
-                for key in candle_data.keys():
-                    candle[key] = candle_data[key][()]
-                kwargs['data'] = candle
-                data.append(Candle(**kwargs))
-            return CandleFeed(name=name,
-                              currency=cur,
-                              datetime_format=df,
-                              index=index,
-                              data=data)
+    def load(cls, file_path):
+        with pandas.HDFStore(file_path, 'r') as store:
+            df = store['df']
+            aux_info = store['aux_info']
+            name = aux_info['name'].iloc[0]
+            currency = aux_info['currency'].iloc[0]
+            datetime_format = aux_info['datetime_format'].iloc[0]
+        return cls.from_dataframe(df, name=name, currency=currency,
+                                  datetime_format=datetime_format)
+    
+    from_save = load
 
 class YahooFeed(CandleFeed):
-    def __init__(self, ticker, currency='USD',
-                 datetime_format='%d.%m.%Y %H:%M:%S', **kwargs):
+    def __init__(self, ticker, datetime_format='%d.%m.%Y %H:%M:%S',
+                 **kwargs):
         ticker_name = str(ticker)
         ticker = yf.Ticker(ticker)
+        currency = ticker.info['currency']
         if 'period' not in kwargs:
             kwargs['period'] = 'max'
         dataframe = ticker.history(**kwargs)
@@ -222,6 +197,11 @@ class YahooFeed(CandleFeed):
         super().__init__(name=ticker_name, currency=currency, data=data,
                           index=index, datetime_format=datetime_format)
     
+    def __str__(self):
+        return f"YahooFeed({self.name}, start={self.min_dateindex}, end={self.max_dateindex})"
+    
+    def __repr__(self):
+        return f"YahooFeed({self.name}, start={self.min_dateindex}, end={self.max_dateindex})"
     #def copy(self):
         #return CandleFeed(name=self.name, currency=self.currency,
                           #data=self.data.copy(), index=self.index.copy(),

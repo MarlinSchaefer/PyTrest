@@ -1,7 +1,6 @@
 import numpy as np
 import datetime
 import warnings
-from ..currency import Money
 
 class Candle(object):
     def __init__(self, data=None, currency=None, timestamp=None,
@@ -27,6 +26,7 @@ class Candle(object):
         return self.low < value < self.high
     
     def __contains__(self, item):
+        from ..currency import Money
         if isinstance(item, str):
             return item in self.data
         elif isinstance(item, (float, int, Money)):
@@ -110,6 +110,7 @@ class Candle(object):
     vol = volume
     
     def get(self, k, d=None, as_currency=False):
+        from ..currency import Money
         if self.currency is not None and as_currency:
             if k in list(self.names.values()) and not k == self.names['volume']:
                 return Money(self.data.get(k, d),
@@ -121,6 +122,7 @@ class Candle(object):
         return self.get(self.names[name])
     
     def convert(self, currency):
+        from ..currency import Money
         data = {}
         money_keys = [self.names[key] for key in ['open', 'close',
                                                   'high', 'low']]
@@ -222,6 +224,7 @@ class Candle(object):
         return self.binary_operator(other, '__truediv__')
     
     def __rtruediv__(self, other):
+        from ..currency import Money
         if isinstance(other, (float, int, Money)):
             data = {}
             for key in self.keys():

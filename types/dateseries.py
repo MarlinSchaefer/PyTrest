@@ -397,6 +397,22 @@ class DateSeries(object):
         ret.head = self.head.copy()
         return ret
     
+    def as_dict(self):
+        ret = {}
+        ret['data'] = self.data
+        ret['index'] = [pt.strftime(self.datetime_format) for pt in self.index]
+        ret['datetime_format'] = self.datetime_format
+        return ret
+    
+    @classmethod
+    def from_dict(cls, dic):
+        data = dic.get('data', [])
+        index = dic.get('index', [])
+        dtf = dic.get('datetime_format', '%d.%m.%Y %H:%M:%S')
+        assert len(data) == len(index)
+        index = [datetime.datetime.strptime(pt, dtf) for pt in index]
+        return DateSeries(data=data, index=index, datetime_format=dtf)
+    
     def plot(self, fig=None, ax=None, **kwargs):
         if fig is None:
             if ax is None:

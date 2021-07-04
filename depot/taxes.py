@@ -53,7 +53,7 @@ class TaxFree(BaseTax):
 class GermanTax(BaseTax):
     def __init__(self, tax_rate=0.25):
         self.tax_rate = tax_rate
-        self.tax_free_money = Money(0., currency='EUR')
+        self.tax_free_money = Money(801., currency='EUR')
         self.zero = Money(0., currency='EUR')
         self.last_tax_year = None
     
@@ -72,7 +72,8 @@ class GermanTax(BaseTax):
     def on_position_reduce(self, position):
         hist = position.history
         dateindex = hist.max_dateindex
-        amount = hist[dateindex][-1][0][0]
+        amount = -hist[dateindex][-1][0][0]
+        assert amount > 0
         curr_price = hist[dateindex][-1][0][1]
         curr_val = amount * curr_price
         init_val = amount * position.open_price

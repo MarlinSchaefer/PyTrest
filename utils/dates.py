@@ -10,3 +10,11 @@ def format_datetime(datetime):
                                 day=d.day
                                 )
     return datetime
+
+def date_range(start, end, step=None):
+    if step is None:
+        step = dt.timedelta(days=1)
+    ret = [start]
+    while ret[-1] + step < end:
+        ret.append(ret[-1] + step)
+    return ret

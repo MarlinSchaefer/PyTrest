@@ -53,7 +53,7 @@ class MACDStrat(BaseStrategy):
             below.set_head_or_prior(self.broker.current_dateindex)
             above.set_head_or_prior(self.broker.current_dateindex)
             if below.value:
-                print("{}: ot value below".format(cf.dateindex))
+                # print("{}: ot value below".format(cf.dateindex))
                 pos = Position(cf, amount=0)
                 num = int((self.depot.value() * 0.01) / (cf.value.high * 0.1))
                 if num > 0:

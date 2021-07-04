@@ -47,7 +47,9 @@ class Portfolio(object):
             dateindex = self.dateindex
         ret = None
         if position in self.positions:
-            ret = self.positions.remove(position)
+            if position in self.positions:
+                ret = position
+            self.positions.remove(position)
         elif position in self.base_positions.values():
             ret = self.base_positions.pop(position.candle_feed)
         if ret is not None:

@@ -274,9 +274,7 @@ class Broker(object):
             self.cancel_order(depot, order)
             return
         cost = self.broker_cost.on_order_execution(order, price)
-        exe = depot.pay_broker(cost, msg='Broker: On order execution')
-        if not exe:
-            return
+            
         if isinstance(order.target, Position):
             pos = order.target
         else:
@@ -286,9 +284,15 @@ class Broker(object):
             depot.portfolio.add_position(pos)
         
         if order.isBuyLong():
+            exe = depot.pay_broker(cost, msg='Broker: On order execution')
+            if not exe:
+                return
             depot.increase_position_size(pos, amount=quantity, price=price)
         elif order.isSellLong():
             depot.reduce_position_size(pos, amount=quantity, price=price)
+            exe = depot.pay_broker(cost, msg='Broker: On order execution')
+            if not exe:
+                raise RuntimeError('Could not pay broker after executing sell order.')
         elif order.isBuyShort():
             depot.reduce_position_size(pos, amount=quantity, price=price)
         elif order.isSellShort():

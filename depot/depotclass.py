@@ -5,6 +5,7 @@ from .position import Position
 from .taxes import TaxFree
 import warnings
 import datetime
+import pickle
 
 class Depot(object):
     def __init__(self, name='N/A', cash=None, currency=None,
@@ -27,7 +28,7 @@ class Depot(object):
                 raise TypeError
         else:
             self.currency = currency
-            self.cash = Money(cash).convert(self.currency)
+            self.cash = Money(cash, self.currency)
             self.history.cash_event(self.cash, self.dateindex,
                                     msg='Depot: Initialized Depot with cash')
         
@@ -111,3 +112,13 @@ class Depot(object):
         self.cash = self.cash + cash
         self.history.cash_event(cash, max(pos.history.index),
                                 msg='Depot: Cash from position increase')
+    
+    def save(self, filepath):
+        with open(filepath, 'wb') as fp:
+            pickle.dump(self, fp)
+    
+    @classmethod
+    def load(cls, filepath):
+        with open(filepath, 'rb') as fp:
+            ret = pickle.load(fp)
+        return ret
