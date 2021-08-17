@@ -3,6 +3,41 @@ import datetime
 import warnings
 
 class Candle(object):
+    """A class to handle stock prices in forms of candles.
+    
+    Arguments
+    ---------
+    data : {dict or None, None}
+        The data to store in the candle. If a dictionary is provided the
+        values must be numbers or PyTrest.currency.Money. A minimum set
+        of keys are required. These have to correspond to the open,
+        close, high, and low price as well as the volume.
+    currency : {str or None, None}
+        The currency to convert all prices to. Default: USD
+    timestamp : {datetime or None, None}
+        A timestamp to associate the candle with.
+    names : {dict or None, None}
+        A dictonary containing the relations to the set of standard
+        keys. The dictionary keys must be `open`, `close`, `high`,
+        `low`, and `volume`. The corresponding values have to correspond
+        to the associated keys in the data dictionary. (For an example
+        see the Notes)
+    
+    Notes
+    -----
+    -names dictionary:
+        The API from which the prices are returned may have a different
+        naming convention for the price data. Instead of lower-key names
+        they may be capitalized. In this case the names dictionary
+        should be:
+        names = {`open`: `Open`,
+                 `close`: `Close`,
+                 `high`: `High`,
+                 `low`: `Low`,
+                 `volume`: `Volume`}
+        The values of the dictionary may be completely arbitrary but
+        must correspond to keys in the data dictionary.
+    """
     def __init__(self, data=None, currency=None, timestamp=None,
                  names=None):
         self.required_keys = ['open', 'close', 'high', 'low', 'volume']
@@ -20,12 +55,31 @@ class Candle(object):
         self.data = data
     
     def keys(self):
+        """Return the keys of the data dictionary.
+        """
         return self.data.keys()
     
     def in_price_range(self, value):
+        """Check if a price is within the candle bounds.
+        
+        Arguments
+        ---------
+        value : float or PyTrest.currency.Money
+            The price to check.
+        
+        Returns
+        -------
+        bool:
+            True if the price is higher than the candle low and lower
+            than the candle high, False otherwise.
+        """
         return self.low < value < self.high
     
     def __contains__(self, item):
+        """Can be used to check whether a key is contained in the
+        dictionary, a price is contained in the Candle or if the item
+        is in the values of the data.
+        """
         from ..currency import Money
         if isinstance(item, str):
             return item in self.data
@@ -35,6 +89,14 @@ class Candle(object):
             return item in list(self.data.values())
     
     def set_timestamp(self, timestamp=None):
+        """Set the timestamp of the Candle.
+        
+        Arguments
+        ---------
+        timestamp : {datetime or None, None}
+            The value to set the timestamp to. If None the current
+            datetime will be used.
+        """
         if timestamp is None:
             timestamp = datetime.datetime.now()
         if not isinstance(timestamp, datetime.datetime):
@@ -43,6 +105,17 @@ class Candle(object):
         self.timestamp = timestamp
     
     def set_name(self, key, new_name=None):
+        """Add a key-value pair to the names dictionary. See the help
+        of the class for more information on the names dictionary.
+        
+        Arguments
+        ---------
+        key : str
+            The key to set a value to.
+        new_name : {object or None, None}
+            The value for the key. If None, return without doing
+            anything.
+        """
         if new_name is None:
             return
         self.names[key] = str(new_name)
@@ -53,6 +126,10 @@ class Candle(object):
     
     @data.setter
     def data(self, data):
+        """Set the data dict. May be either None or a dictionary.
+        
+        Warns if any of the required keys are missing.
+        """
         if data is None:
             self._data = {}
         elif isinstance(data, dict):
@@ -110,6 +187,22 @@ class Candle(object):
     vol = volume
     
     def get(self, k, d=None, as_currency=False):
+        """Get a value from the data dictionary by any of its native
+        keys.
+        
+        k : str
+            The key to access.
+        d : {object or None, None}
+            Return value if the key is not in the dictionary.
+        as_currency : {bool, False}
+            Return the value of the key as PyTrest.currency.Money in the
+            currency set in Candle.currency, if possible.
+        
+        Returns
+        -------
+        object or PyTrest.currency.Money:
+            The value contained in the data dictionary.
+        """
         from ..currency import Money
         if self.currency is not None and as_currency:
             if k in list(self.names.values()) and not k == self.names['volume']:
@@ -119,9 +212,32 @@ class Candle(object):
         return self.data.get(k, d)
     
     def get_by_name(self, name):
+        """Get a value from the data dictionary by any of the key in
+        names.
+        
+        name : str
+            The key to access.
+        
+        Returns
+        -------
+        object:
+            The value contained in the data dictionary.
+        """
         return self.get(self.names[name])
     
     def convert(self, currency):
+        """Convert this Candle to a Candle in another currency.
+        
+        Arguments
+        ---------
+        currency : str
+            The currency to convert the Candle to.
+        
+        Returns
+        -------
+        Candle:
+            A copy of this Candle with a new currency.
+        """
         from ..currency import Money
         data = {}
         money_keys = [self.names[key] for key in ['open', 'close',
@@ -152,6 +268,8 @@ class Candle(object):
         return list(set(self_keys).intersection(set(other_keys)))
     
     def as_dict(self):
+        """Serialize this instance as a dictionary.
+        """
         name_keys = []
         name_vals = []
         for key, val in self.names.items():

@@ -1,9 +1,49 @@
+"""This module contains the core type of this library; the DateSeries.
+It is a class that stores arbitrary data ordered by a datetime index and
+exposes easy access functions.
+"""
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from .events import EventManager, EventHandler
 
 class DateSeries(object):
+    """Core object for handling data sorted by datetime indices.
+    
+    This object stores arbitrary data indexed by datetimes. It can be
+    manipulated by external events. It allows for easy access and tracks
+    the position of a current read head.
+    
+    Arguments
+    ---------
+    parent : {None or DateSeries like object, None}
+        A DateSeries from which this instance is derived. Certain action
+        may be synchronised with this parent.
+    data : {list or None, None}
+        A list of initial data. If None, an empty list is initialized.
+        Must be of same length as index.
+    index : {list or None, None}
+        A list of datetimes corresponding to the elements in data. If
+        None an empty list is initialized. Must be of same length as
+        data.
+    datetime_format : {str, '%d.%m.%Y %H:%M:%S'}
+        A string which is used to encode datetimes as strings and decode
+        strings into datetime objects.
+    
+    Properties
+    ----------
+    value:
+        The element of the contained data at the current read head
+        postion.
+    dateindex/head_date:
+        The datetime in the index at the current read head postion.
+    head_index:
+        The integer index of the current read head position.
+    min_dateindex:
+        The minimum dateindex contained in the index.
+    max_dateindex:
+        The maximum dateindex contained in the index.
+    """
     manager = EventManager()
     def __init__(self, parent=None, data=None, index=None,
                  datetime_format='%d.%m.%Y %H:%M:%S'):
@@ -40,26 +80,54 @@ class DateSeries(object):
         return len(self.data)
     
     def is_parent(self, dateseries):
+        """Check if a DateSeries is known as the parent to this
+        instance.
+        
+        Arguments
+        ---------
+        dateseries : object
+            An object of which to check if it is the parent of this
+            instance.
+        
+        Returns
+        -------
+        bool:
+            True if the object is the parent of this instance, False
+            otherwise.
+        """
         return dateseries is self.parent
     
     @property
     def value(self):
+        """The element in the stored data at the current read head
+        position.
+        """
         return self.data[self.head[0]]
     
     @property
     def head_date(self):
+        """The dateindex stored in the index at the current read head
+        position.
+        """
         return self.head[1]
     
     @property
     def dateindex(self):
+        """Synonym to self.head_date. The dateindex stored in the index
+        at the current read head position.
+        """
         return self.head_date
     
     @property
     def head_index(self):
+        """The integer index of the current read head position.
+        """
         return self.head[0]
     
     @property
     def min_dateindex(self):
+        """The minimum datetime contained in the index.
+        """
         try:
             return min(self.index)
         except:
@@ -67,6 +135,8 @@ class DateSeries(object):
     
     @property
     def max_dateindex(self):
+        """The maximum datetime contained in the index.
+        """
         try:
             return max(self.index)
         except:
@@ -74,6 +144,17 @@ class DateSeries(object):
     
     @manager.send('insert_value')
     def insert_value(self, dateindex, value=None):
+        """Insert a value into the DateSeries.
+        
+        This method sends an event for synchronisation when called.
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The datetime at which to insert a value.
+        value : {object, None}
+            The object to insert into the DateSeries.
+        """
         if len(self.index) == 0:
             self.index.append(dateindex)
             self.data.append(value)
@@ -95,6 +176,24 @@ class DateSeries(object):
         
     @manager.send('set_head')
     def set_head(self, dateindex):
+        """Set the read head to a given dateindex.
+        
+        Sends an event for synchronisation purposes when called. Use
+        `self.set_head_silent` to avoid sending an event. (Recommended
+        only when the head is adjusted temporarily.)
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The datetime which to set the head to. Must be contained in
+            the index to set the head successfully.
+        
+        Returns
+        -------
+        bool:
+            Returns True if the head was set successfully, False
+            otherwise.
+        """
         idx = np.searchsorted(np.array(self.index), dateindex)
         if not self.index[idx] == dateindex:
             return False
@@ -102,6 +201,23 @@ class DateSeries(object):
         return True
     
     def set_head_silent(self, dateindex):
+        """Same as `self.set_head` but without sending an event for
+        synchronisation purposes.
+        
+        Use with care.
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The datetime which to set the head to. Must be contained in
+            the index to set the head successfully.
+        
+        Returns
+        -------
+        bool:
+            Returns True if the head was set successfully, False
+            otherwise.
+        """
         idx = np.searchsorted(np.array(self.index), dateindex)
         if not self.index[idx] == dateindex:
             return False
@@ -109,30 +225,68 @@ class DateSeries(object):
         return True
     
     def set_head_action(self, event):
+        """The function that is called when a `set_head` action is
+        received. If the emitter of the event is a parent of this
+        instance the head is adjusted to the same position.
+        
+        Arguments
+        ---------
+        event : Event
+            A PyTrest.types.events.Event.
+        
+        """
         if event.emitter is self:
             return
         if not self.is_parent(event.emitter):
             return
         dateindex = event.args[1]
         self.set_head(dateindex)
-        #idx = np.searchsorted(np.array(self.index), dateindex)
-        #if not self.index[idx] == dateindex:
-            #return
-        #self.head = [idx, dateindex]
     
     def set_head_closest(self, dateindex):
+        """Set the read head to the dateindex of the index closest to
+        the provided dateindex.
+        
+        This function sends a `set_head` event for synchronisation
+        purposes. Use `self.set_head_closest_silent` to avoid sending
+        such an event.
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The datetime to use as reference to find the closest
+            dateindex within this DateSeries. Sets the read head to the
+            closest found dateindex.
+        """
         idx = np.searchsorted(np.array(self.index), dateindex)
         idx += np.argmin(np.abs([self.index[idx]-dateindex,
                                  self.index[idx+1]-dateindex]))
         self.set_head(self.index[idx])
     
     def set_head_closest_silent(self, dateindex):
+        """Same as `self.set_head_closest` without sending an event.
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The datetime to use as reference to find the closest
+            dateindex within this DateSeries. Sets the read head to the
+            closest found dateindex.
+        """
         idx = np.searchsorted(np.array(self.index), dateindex)
         idx += np.argmin(np.abs([self.index[idx]-dateindex,
                                  self.index[idx+1]-dateindex]))
         self.set_head_silent(self.index[idx])
     
     def set_head_or_prior(self, dateindex):
+        """Set the read head to the given dateindex or the closest
+        available datetime before the provided location.
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The maximum datetime to set the read head to. Set the read
+            head to this datetime or the closest prior datetime.
+        """
         if dateindex in self.index:
             self.set_head(dateindex)
         else:
@@ -140,18 +294,46 @@ class DateSeries(object):
             self.set_head(self.index[idx-1])
     
     def __next__(self):
+        """Return the next value in the DateSeries from the read head.
+        Advances the read head by one index.
+        """
         if self.head[0] >= len(self) - 1:
             raise StopIteration()
         self.set_head(self.index[self.head[0]+1])
         return self.value
     
     def next_date(self):
+        """Return the datetime following the current read head position.
+        If the read head is at the end return the current datetime.
+        """
         if self.head[0] >= len(self) - 1:
             return self.head[1]
         else:
             return self.index[self.head[0] + 1]
     
     def advance_head(self, timeindex, use_closest=False):
+        """Advance the read head by a given number of steps or a given
+        time delta.
+        
+        Arguments
+        ---------
+        timeindex : int >= 0 or timedelta
+            The amount of time (timedelta) or the number of dateindices
+            (int) to advance the read head by. If an integer value is
+            used it has to be positive.
+        use_closest : {bool, False}
+            Whether or not to use the closest available dateindex when
+            the timeindex does not hit an allowed position. (Either by
+            hitting the end of available data or by landing between
+            dateindices in the index.)
+        
+        Raises
+        ------
+        ValueError:
+            Raises a ValueError if the provided timeindex is negative.
+        IndexError:
+            Raises an IndexError if no fitting index can be found.
+        """
         posmsg = 'Can advance the read-head only in the positive '
         posmsg += 'direction.'
         
@@ -183,6 +365,15 @@ class DateSeries(object):
                 return self.set_head(self.head[1] + timedelta)
     
     def iloc(self, index):
+        """The value at a given index-location. This index has to be an
+        integer and allows to access the values of the DateSeries like a
+        normal list.
+        
+        Arguments
+        ---------
+        index : int
+            The index at which to access the data.
+        """
         if index < 0:
             index = len(self) + index
         if index < 0 or index >= len(self):
@@ -216,6 +407,21 @@ class DateSeries(object):
         return self.data[index]
     
     def loc(self, dateindex, use_closest=False):
+        """Return the value of data at a given datetime.
+        
+        Arguments
+        ---------
+        dateindex : datetime
+            The datetime at which to access the data.
+        use_closest : {Bool, False}
+            Whether or not to use the closest datetime, if the provided
+            dateindex is not contained in the index.
+        
+        Returns
+        -------
+        object:
+            The value stored in data at the given location.
+        """
         original_head = self.head.copy()
         if use_closest:
             self.set_head_closest_silent(dateindex)
@@ -230,6 +436,25 @@ class DateSeries(object):
         return ret
     
     def sanitize_slice(self, dateindex):
+        """Sanitice the user input when accessing the DateSeries using a
+        slice.
+        
+        Arguments
+        ---------
+        dateindex : slice
+            A slice that should be used to access the data. The slice
+            may contain integers, datetimes (where the step has to be a
+            timedelta) or strings representing datetimes.
+        
+        Returns
+        -------
+        start : int or datetime
+            The starting index of the slice.
+        stop : int or datetime
+            The stopping index of the slice.
+        step : int or timedelta or None
+            The step for the slice.
+        """
         if isinstance(dateindex, slice):
             #Clean up start, stop and step
             start = dateindex.start
@@ -309,6 +534,14 @@ class DateSeries(object):
             raise TypeError(msg)
     
     def __getitem__(self, dateindex):
+        """Access the data in the DateSeries through the usual list
+        syntax: DateSeries[index].
+        
+        dateindex : int or str or datetime or slice of the previous or None
+            The dateindex at which to access the data. If a string is
+            provided it has to be decodable into a datetime using the
+            DateSeries.datetime_format.
+        """
         if isinstance(dateindex, slice):
             start, stop, step = self.sanitize_slice(dateindex)
             
@@ -345,6 +578,22 @@ class DateSeries(object):
     
     @manager.send('__setitem__')
     def __setitem__(self, dateindex, value):
+        """Set the value of elements in the data using the usual list
+        syntax: DateSeries[index] = value.
+        
+        Sends a `__setitem__` event for synchronisation purposes when
+        called.
+        
+        Arguments
+        ---------
+        dateindex : index accepted by __getitem__
+            The dateindex at which to set the data. May be a slice.
+        value : object
+            The object to set the value of all accessed indices to.
+            Care, if an iterable is provided, the data values are not
+            set to the values of the iterable but all values are set to
+            the entire iterable.
+        """
         if isinstance(dateindex, slice):
             start, stop, step = self.sanitize_slice(dateindex)
             
@@ -388,9 +637,23 @@ class DateSeries(object):
         raise TypeError('Unrecognized type.')
     
     def as_list(self):
+        """Return the contents of the entire DateSeries as list.
+        Equivalent to calling DateSeries.data.
+        
+        Returns
+        -------
+        list of objects:
+            The data stored in this DateSeries.
+        """
         return self.data
     
     def copy(self):
+        """Copy the contents of this DateSeries to a new instance.
+        
+        Returns
+        -------
+        DateSeries
+        """
         ret = self.__class__(data=self.data.copy(),
                              index=self.index.copy(),
                              datetime_format=self.datetime_format)
@@ -398,6 +661,14 @@ class DateSeries(object):
         return ret
     
     def as_dict(self):
+        """Serialize this object to a dictionary.
+        
+        Returns
+        -------
+        dict:
+            A dictionary containing all information but the read head
+            position of this object.
+        """
         ret = {}
         ret['data'] = self.data
         ret['index'] = [pt.strftime(self.datetime_format) for pt in self.index]
@@ -406,6 +677,20 @@ class DateSeries(object):
     
     @classmethod
     def from_dict(cls, dic):
+        """Load a DateSeries from a dictionary output by
+        DateSeries.as_dict.
+        
+        Arguments
+        ---------
+        dic : dict
+            A dictionary containing keys `data`, `index`, and
+            `datetime_format`.
+        
+        Returns
+        -------
+        DateSeries:
+            The DateSeries loaded from the dictionary.
+        """
         data = dic.get('data', [])
         index = dic.get('index', [])
         dtf = dic.get('datetime_format', '%d.%m.%Y %H:%M:%S')
@@ -414,6 +699,34 @@ class DateSeries(object):
         return DateSeries(data=data, index=index, datetime_format=dtf)
     
     def plot(self, fig=None, ax=None, **kwargs):
+        """Plot the contents of this DateSeries, if possible.
+        
+        Uses matplotlib to do the plotting.
+        
+        Arguments
+        ---------
+        fig : {matplotlib.pyplot.Figure or None, None}
+            The figure to use for plotting purposes.
+        ax : {matplotlib.pyplot.Axes or None, None}
+            The axes to use for plotting purposes.
+        **kwargs : 
+            All other keyword arguments are passed to
+            matplotlib.pyplot.Axes.plot.
+        
+        Returns
+        -------
+        fig : matplotlib.pyplot.Figure
+            The figure that was used for plotting.
+        ax : matplotlib.pyplot.Axes
+            The axes that was used for plotting.
+        
+        Notes
+        -----
+        -If no figure or axes are provided, new instances will be
+         created.
+        -Only data values that contain a `__float__` conversion are
+         plotted.
+        """
         if fig is None:
             if ax is None:
                 fig, ax = plt.subplots()
