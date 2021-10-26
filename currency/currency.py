@@ -9,6 +9,31 @@ DEFAULT_CONV_TYPE = 'online'
 CONV_WARN = True
 
 class ConvType(object):
+    """Class to handle conversion between different currencies.
+    
+    This class allows to convert between different currencies based on
+    three different approaches. It can use either online data (slow but
+    most accurate), cached data (fast and accurate), or a fixed ratio
+    (fast but inaccurate).
+    
+    Arguments
+    ---------
+    None
+    
+    Attributes
+    ----------
+    cache_location :
+        The location at which the cache file is stored. This location
+        is accessed when reading or writing from/to the cache file.
+    default_cache_interval :
+        The default duration that has to pass between calls to retrieve
+        online data for caching purposes.
+    datetime_format :
+        The datetime format that is used to store datetime objects as
+        strings and load them back in.
+    default_type :
+        The default conversion type when no other is specified.
+    """
     cache_location = os.path.join(os.path.split(os.path.abspath(__file__))[0], 'cache_file.json')
     default_cache_interval = datetime.timedelta(minutes=30)
     datetime_format = '%d.%m.%Y %H:%M:%S'
@@ -17,6 +42,8 @@ class ConvType(object):
         self.load_cache()
     
     def load_cache(self):
+        """Load the cache file.
+        """
         from ..types import DateSeries
         self.cache = {}
         try:
@@ -34,8 +61,20 @@ class ConvType(object):
             pass
     
     def write_cache(self, force=False, cache_interval=None):
+        """Write the current in-memory cache to disk.
+        
+        Arguments
+        ---------
+        force : {bool, False}
+            Force an overwrite even when the duration since the last
+            update is smaller than the specified cache_interval.
+        cache_interval : {datetime or None, None}
+            The duration since the last write that has to pass before
+            writing to disk again. If None uses the
+            default_cache_interval.
+        """
         if not force:
-            with open(self.cache_location) as fp:
+            with open(self.cache_location, 'r') as fp:
                 tmp = json.load(fp)
             last_written = tmp.get('last_written', None)
             if last_written is not None:
@@ -59,6 +98,41 @@ class ConvType(object):
             json.dump(to_write, fp, indent=4)
     
     def convert(self, mon, new_curr, conv_type=None, ratio=None, date=None):
+        """Convert an instance of Money of one currency to another
+        currency.
+        
+        Arguments
+        ---------
+        mon : Money
+            The Money instance to convert from.
+        new_curr : str
+            A currency understood by YahooFinance (e.g. `USD` or `EUR`).
+        conv_type : {`online` or `cached` or `fixed` or None, None}
+            The type of conversion to use. If set to None the default
+            conversion is used. For a quick description of the different
+            conversion types see the notes below.
+        ratio : {float or None, None}
+            The conversion ratio to use for a fixed conversion. If set
+            to None will be interpreted as 1. Only used for conv_type
+            `fixed`.
+        date : {datetime or None, None}
+            The datetime to use as a basis for conversion. If set to
+            None the current datetime will be used.
+        
+        Returns
+        -------
+        Money:
+            The converted Money object.
+        
+        Notes
+        -----
+        The different conversion types are
+        online:
+            Try downloading more up to date data if the cached data is
+            more than 1min old. Otherwise use cached data.
+        cached:
+            Use the closest 
+        """
         if new_curr == mon.currency:
             return mon
         if conv_type is None:
