@@ -435,7 +435,7 @@ class DateSeries(object):
         self.head = original_head
         return ret
     
-    def sanitize_slice(self, dateindex):
+    def sanitize_slice_old(self, dateindex):
         """Sanitice the user input when accessing the DateSeries using a
         slice.
         
@@ -533,7 +533,67 @@ class DateSeries(object):
             msg = msg.format(type(dateindex))
             raise TypeError(msg)
     
+    def sanitize_slice(self, dateindex):
+        if isinstance(dateindex, slice):
+            start = dateindex.start
+            stop = dateindex.stop
+            step = dateindex.step
+            
+            #Handle start
+            if start is None:
+                start = 0
+            if isinstance(start, str):
+                start = datetime.datetime.strptime(start, self.datetime_format)
+            if isinstance(start, datetime.datetime):
+                start = np.searchsorted(self.index, start, side='left')
+            
+            #Handle stop
+            if stop is None:
+                stop = len(self.index)
+            if isinstance(stop, str):
+                stop = datetime.datetime.strptime(stop, self.datetime_format)
+            if isinstance(stop, datetime.datetime):
+                stop = np.searchsorted(self.index, stop, side='right')
+            
+            if step is not None and not isinstance(step, int):
+                msg  = 'The step given when slicing a DateSeries must '
+                msg += 'be of type int or None. Got {} instead.'
+                msg = msg.format(type(step))
+                raise TypeError(msg)
+            
+            return start, stop, step
+        else:
+            msg = 'sanitize_slice expected a slice as input type. Got '
+            msg += '{} instead.'
+            msg = msg.format(type(dateindex))
+            raise TypeError(msg)
+    
     def __getitem__(self, dateindex):
+        """Access the data in the DateSeries through the usual list
+        syntax: DateSeries[index].
+        
+        dateindex : int or str or datetime or slice of the previous or None
+            The dateindex at which to access the data. If a string is
+            provided it has to be decodable into a datetime using the
+            DateSeries.datetime_format.
+        """
+        if isinstance(dateindex, slice):
+            start, stop, step = self.sanitize_slice(dateindex)
+            
+            dat = self.data[slice(start, stop, step)]
+            ind = self.index[slice(start, stop, step)]
+            
+            return DateSeries(data=dat, index=ind,
+                              datetime_format=self.datetime_format)
+        elif isinstance(dateindex, int):
+            return self.iloc(dateindex)
+        elif isinstance(dateindex, str):
+            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
+        if isinstance(dateindex, datetime.datetime):
+            return self.loc(dateindex)
+        raise TypeError('Unrecognized type.')
+    
+    def __getitem__old(self, dateindex):
         """Access the data in the DateSeries through the usual list
         syntax: DateSeries[index].
         
@@ -578,6 +638,61 @@ class DateSeries(object):
     
     @manager.send('__setitem__')
     def __setitem__(self, dateindex, value):
+        """Set the value of elements in the data using the usual list
+        syntax: DateSeries[index] = value.
+        
+        Sends a `__setitem__` event for synchronisation purposes when
+        called.
+        
+        Arguments
+        ---------
+        dateindex : index accepted by __getitem__
+            The dateindex at which to set the data. May be a slice.
+        value : object
+            The object to set the value of all accessed indices to.
+            Care, if an iterable is provided, the data values are not
+            set to the values of the iterable but all values are set to
+            the entire iterable.
+        """
+        if isinstance(dateindex, slice):
+            start, stop, step = self.sanitize_slice(dateindex)
+            
+            if isinstance(value, DateSeries):
+                tmp = self[slice(start, stop, step)]
+                for didx in tmp.index:
+                    #Only use values with a compatible index
+                    try:
+                        self[didx] = value[didx]
+                    except (ValueError, IndexError):
+                        pass
+            else:
+                if step is None:
+                    step = 1
+                length = len(self.data[slice(start, stop, step)])
+                if isinstance(value, list):
+                    assert length == len(value)
+                    for i, idx in enumerate(range(start, stop, step)):
+                        self.data[idx] = value[i]
+                else:
+                    for idx in range(start, stop, step):
+                        self.data[idx] = value
+            return
+        elif isinstance(dateindex, int):
+            self.data[dateindex] = value
+            return
+        elif isinstance(dateindex, str):
+            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
+        if isinstance(dateindex, datetime.datetime):
+            if dateindex in self.index:
+                i = self.index.index(dateindex)
+            else:
+                raise ValueError('Dateindex {} not in DateSeries.'.format(dateindex))
+            self.data[i] = value
+            return
+        raise TypeError('Unrecognized type.')
+    
+    @manager.send('__setitem__old')
+    def __setitem__old(self, dateindex, value):
         """Set the value of elements in the data using the usual list
         syntax: DateSeries[index] = value.
         
