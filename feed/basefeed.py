@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import datetime
 import yfinance as yf
-import h5py
 import numpy as np
 import pandas
 import os
+import requests
+
 
 class SubFeed(DateSeries):
     def __init__(self, candle_attribute='open', **kwargs):
@@ -29,7 +30,7 @@ class CandleFeed(DateSeries):
     def __init__(self, name='N/A', currency='USD', data=None, index=None,
                  datetime_format='%d.%m.%Y %H:%M:%S'):
         super().__init__(data=data, index=index,
-                       datetime_format=datetime_format)
+                         datetime_format=datetime_format)
         self.name = name
         self.currency = currency
     
@@ -176,12 +177,37 @@ class CandleFeed(DateSeries):
     
     from_save = load
 
+    def __getitem__(self, index):
+        ds = super().__getitem__(index)
+        if isinstance(ds, DateSeries):
+            return CandleFeed(data=ds.data, index=ds.index, name=self.name,
+                              datetime_format=ds.datetime_format,
+                              currency=self.currency)
+        else:
+            return ds
+
+
 class YahooFeed(CandleFeed):
     def __init__(self, ticker, datetime_format='%d.%m.%Y %H:%M:%S',
                  **kwargs):
         ticker_name = str(ticker)
         ticker = yf.Ticker(ticker)
-        currency = ticker.info['currency']
+        url = f'https://query2.finance.yahoo.com/v8/finance/chart/{ticker_name}'
+        header = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36"}
+        params = {}
+        params['range'] = "30d"
+        params['interval'] = "1d"
+        params['includePrePost'] = False
+        params['events'] = 'div,splits'
+        try:
+            response = requests.get(url=url,
+                                    params=params,
+                                    headers=header)
+
+            data = response.json()["chart"]["result"][0]
+            currency = data["meta"]["currency"]
+        except Exception:
+            currency = ticker.info['currency']
         if 'period' not in kwargs:
             kwargs['period'] = 'max'
         dataframe = ticker.history(**kwargs)
@@ -195,14 +221,50 @@ class YahooFeed(CandleFeed):
                                timestamp=index[i],
                                names=names))
         super().__init__(name=ticker_name, currency=currency, data=data,
-                          index=index, datetime_format=datetime_format)
+                         index=index, datetime_format=datetime_format)
     
     def __str__(self):
         return f"YahooFeed({self.name}, start={self.min_dateindex}, end={self.max_dateindex})"
     
     def __repr__(self):
         return f"YahooFeed({self.name}, start={self.min_dateindex}, end={self.max_dateindex})"
-    #def copy(self):
-        #return CandleFeed(name=self.name, currency=self.currency,
-                          #data=self.data.copy(), index=self.index.copy(),
-                          #datetime_format=self.datetime_format)
+
+
+class YahooFeedFast(CandleFeed):
+    def __init__(self, ticker, period='1y', interval='1d'):
+        url = f'https://query2.finance.yahoo.com/v8/finance/chart/{ticker}'
+
+        header = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36"}
+
+        params = {}
+        params['range'] = period.lower()
+        params['interval'] = interval.lower()
+        params['includePrePost'] = False
+        params['events'] = 'div,splits'
+
+        response = requests.get(url=url,
+                                params=params,
+                                headers=header)
+
+        data = response.json()["chart"]["result"][0]
+        currency = data["meta"]["currency"]
+
+        times = data["timestamp"]
+        prices = data["indicators"]["quote"][0]
+        payload = []
+        index = []
+        for t, h, l, o, c, v in zip(times, prices["high"], prices["low"],
+                                    prices["open"], prices["close"],
+                                    prices['volume']):
+            t = datetime.datetime.fromtimestamp(t)
+            candle = Candle(data={"High": h,
+                                  "Low": l,
+                                  "Open": o,
+                                  "Close": c,
+                                  "Volume": v},
+                            currency=currency,
+                            timestamp=t)
+            payload.append(candle)
+            index.append(t)
+        super().__init__(name=ticker, currency=currency, data=payload,
+                         index=index)

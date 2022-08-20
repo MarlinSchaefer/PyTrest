@@ -380,7 +380,7 @@ class Money(object):
         if isinstance(other, type(self)):
             o = self.as_own_currency(other)
             return self.copy_new_amount(self.amount + o.amount)
-        elif isinstance(other, float) or isinstance(other, int):
+        elif isinstance(other, (int, float, np.integer, np.inexact)):
             return self.copy_new_amount(self.amount + other)
         else:
             msg = f'Cannot add instance of type {type(other)} to'

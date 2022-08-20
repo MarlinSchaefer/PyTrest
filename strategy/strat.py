@@ -2,6 +2,7 @@ from ..math import MACDSignal, Crossover
 from ..broker.order import BuyLongOrder, SellLongOrder
 from ..depot.position import Position
 
+
 class BaseStrategy(object):
     def __init__(self, broker, depot, candle_feeds=None):
         self.broker = broker
@@ -27,6 +28,7 @@ class BaseStrategy(object):
     def suggest_orders(self):
         raise NotImplementedError
 
+
 class MACDStrat(BaseStrategy):
     def __init__(self, broker, depot, candle_feeds=None):
         self.crosses_above = []
@@ -49,21 +51,16 @@ class MACDStrat(BaseStrategy):
             if cf.value.low < op * 0.9 or cf.value.high > op * 1.15:
                 order = SellLongOrder(pos, pos.size)
                 orders.append(order)
-        for cf, below, above in zip(self.candle_feeds, self.crosses_below, self.crosses_above):
+        for cf, below, above in zip(self.candle_feeds,
+                                    self.crosses_below,
+                                    self.crosses_above):
             below.set_head_or_prior(self.broker.current_dateindex)
             above.set_head_or_prior(self.broker.current_dateindex)
             if below.value:
-                # print("{}: ot value below".format(cf.dateindex))
                 pos = Position(cf, amount=0)
                 num = int((self.depot.value() * 0.01) / (cf.value.high * 0.1))
                 if num > 0:
                     order = BuyLongOrder(pos, num)
                     orders.append(order)
                     self.positions.append(pos)
-            #elif above.value:
-                #print("{}: ot value above".format(cf.dateindex))
-                #for pos in self.positions:
-                    #if pos.candle_feed == cf:
-                        #order = SellLongOrder(pos, pos.size)
-                        #orders.append(order)
         return orders
