@@ -50,6 +50,7 @@ class TaxFree(BaseTax):
     def on_dividend(self, dividend):
         return self.zero
 
+
 class GermanTax(BaseTax):
     def __init__(self, tax_rate=0.25):
         self.tax_rate = tax_rate

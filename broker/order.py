@@ -3,15 +3,17 @@ from ..depot import Position
 from ..feed import CandleFeed
 from .constraints import BaseConstraint, BaseLimit, BaseStop
 
+
 class OrderAction(object):
     BUY_LONG = 0
     SELL_LONG = 1
     BUY_SHORT = 2
     SELL_SHORT = 3
+    
     def __init__(self, order_action):
         if isinstance(order_action, int):
             if order_action in [self.BUY_LONG, self.SELL_LONG,
-                              self.BUY_SHORT, self.SELL_SHORT]:
+                                self.BUY_SHORT, self.SELL_SHORT]:
                 self.order_action = order_action
             else:
                 raise ValueError
@@ -33,7 +35,7 @@ class OrderAction(object):
                 arg = self.order_action
             except AttributeError:
                 msg = 'An OrderAction must be provided.'
-                raise ValueError
+                raise ValueError(msg)
         return arg in target
     
     def isBuy(self, arg=None):
@@ -68,8 +70,10 @@ class OrderAction(object):
         return self._check_action(arg=arg,
                                   target=[self.SELL_SHORT])
 
+
 class GroupAction(object):
     ONE_CANCELS_ALL = 0
+    
     def __init__(self, order_action):
         if isinstance(order_action, int):
             if order_action in [self.ONE_CANCELS_ALL]:
@@ -94,12 +98,13 @@ class GroupAction(object):
                 arg = self.order_action
             except AttributeError:
                 msg = 'An OrderAction must be provided.'
-                raise ValueError
+                raise ValueError(msg)
         return arg in target
     
     def isOneCancelsAll(self, args=None):
-        return self._check_action(arg=arg,
+        return self._check_action(arg=args,
                                   target=[self.ONE_CANCELS_ALL])
+
 
 class OrderStatus(object):
     IDLE = 0
@@ -109,9 +114,11 @@ class OrderStatus(object):
     FILLED = 4
     
     ALLOWED_TRANSITIONS = {IDLE: [IDLE, ACTIVE, CANCELLED],
-                           ACTIVE: [IDLE, ACTIVE, CANCELLED, PARTIALLY_FILLED, FILLED],
+                           ACTIVE: [IDLE, ACTIVE, CANCELLED, PARTIALLY_FILLED,
+                                    FILLED],
                            CANCELLED: [CANCELLED],
-                           PARTIALLY_FILLED: [CANCELLED, PARTIALLY_FILLED, FILLED],
+                           PARTIALLY_FILLED: [CANCELLED, PARTIALLY_FILLED,
+                                              FILLED],
                            FILLED: [FILLED]}
     
     def __init__(self, status):
@@ -199,6 +206,7 @@ class OrderStatus(object):
         if transition_okay:
             old_status.order_status = new_status.order_status
         return transition_okay
+
 
 class BaseOrder(object):
     def __init__(self, target, action, limit=None, stop=None,
@@ -373,6 +381,7 @@ class BaseOrder(object):
     def isFilled(self):
         return self.status.isFilled()
 
+
 class BaseOrderGroup(object):
     def __init__(self, group_action, orders=None):
         self.group_action = group_action
@@ -400,11 +409,13 @@ class BaseOrderGroup(object):
             self._orders = orders
         else:
             raise TypeError
-            
+
+
 class OneCancelsAllOrderGroup(BaseOrderGroup):
     def __init__(self, orders=None):
         super().__init__(group_action=GroupAction('ONE_CANCELS_ALL'),
                          orders=orders)
+
 
 class BuyLongOrder(BaseOrder):
     def __init__(self, target, quantity, limit=None, stop=None,
@@ -419,6 +430,7 @@ class BuyLongOrder(BaseOrder):
                          stop=stop, quantity=quantity,
                          all_or_nothing=all_or_nothing,
                          good_until=good_until)
+
 
 class SellLongOrder(BaseOrder):
     def __init__(self, target, quantity, limit=None, stop=None,

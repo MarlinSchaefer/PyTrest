@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from .events import EventManager, EventHandler
 
+
 class DateSeries(object):
     """Core object for handling data sorted by datetime indices.
     
@@ -45,6 +46,7 @@ class DateSeries(object):
         The maximum dateindex contained in the index.
     """
     manager = EventManager()
+    
     def __init__(self, parent=None, data=None, index=None,
                  datetime_format='%d.%m.%Y %H:%M:%S'):
         self.parent = parent
@@ -53,20 +55,24 @@ class DateSeries(object):
         else:
             self.handler = parent.handler
         
-        #head = Read-head [index position, datetime]
+        # head = Read-head [index position, datetime]
         if data is None:
             self.data = []
         else:
             self.data = data
+        
         if index is None:
             self.index = []
         else:
             self.index = index
+        
         assert len(self.data) == len(self.index)
+        
         if len(self.index) == 0:
             self.head = [-1, None]
         else:
             self.head = [0, self.index[0]]
+        
         self.datetime_format = datetime_format
         self.handler.listen('set_head', self.set_head_action)
     
@@ -128,19 +134,13 @@ class DateSeries(object):
     def min_dateindex(self):
         """The minimum datetime contained in the index.
         """
-        try:
-            return min(self.index)
-        except:
-            return None
+        return min(self.index, default=None)
     
     @property
     def max_dateindex(self):
         """The maximum datetime contained in the index.
         """
-        try:
-            return max(self.index)
-        except:
-            return None
+        return max(self.index, default=None)
     
     @manager.send('insert_value')
     def insert_value(self, dateindex, value=None):
@@ -164,10 +164,10 @@ class DateSeries(object):
             idx = np.searchsorted(np.array(self.index), dateindex)
             if idx < len(self.index):
                 if self.index[idx] == dateindex:
-                    msg = 'Cannot insert when index is already occupied. '
+                    msg = 'Cannot insert when index is already occupied.'
                     raise IndexError(msg)
         
-            #Check if head needs to be moved
+            # Check if head needs to be moved
             if idx < self.head[0]:
                 self.head[0] += 1
             
@@ -194,11 +194,7 @@ class DateSeries(object):
             Returns True if the head was set successfully, False
             otherwise.
         """
-        idx = np.searchsorted(np.array(self.index), dateindex)
-        if not self.index[idx] == dateindex:
-            return False
-        self.head = [idx, dateindex]
-        return True
+        return self.set_head_silent(dateindex)
     
     def set_head_silent(self, dateindex):
         """Same as `self.set_head` but without sending an event for
@@ -353,7 +349,7 @@ class DateSeries(object):
         elif isinstance(timeindex, datetime.timedelta):
             if timeindex < datetime.timedelta(seconds=0):
                 raise ValueError(posmsg)
-            if self.head[1] + timedelta > self.index[-1]:
+            if self.head[1] + timeindex > self.index[-1]:
                 if use_closest:
                     timedelta = self.index[-1] - self.head[1]
                 else:
@@ -456,12 +452,12 @@ class DateSeries(object):
             The step for the slice.
         """
         if isinstance(dateindex, slice):
-            #Clean up start, stop and step
+            # Clean up start, stop and step
             start = dateindex.start
             stop = dateindex.stop
             step = dateindex.step
             
-            #Handle start is None
+            # Handle start is None
             if start is None:
                 if stop is None:
                     if step is None:
@@ -485,12 +481,12 @@ class DateSeries(object):
                     msg = 'Unrecognized type for stop.'
                     raise TypeError(msg)
             
-            #Handle start is integer
+            # Handle start is integer
             if isinstance(start, int):
                 if isinstance(stop, (datetime.datetime, str)):
                     start = self.index[start]
                 elif stop is None:
-                    #This is the only case where we loop over integers
+                    # This is the only case where we loop over integers
                     stop = len(self)
                     if step is None:
                         step = 1
@@ -501,7 +497,7 @@ class DateSeries(object):
                     msg += 'string specifying a datetime.'
                     raise TypeError(msg)
             
-            #Handle string start, stop, step
+            # Handle string start, stop, step
             if isinstance(start, str):
                 start = datetime.datetime.strptime(start, self.datetime_format)
             if isinstance(stop, str):
@@ -512,7 +508,7 @@ class DateSeries(object):
                 msg += 'datetime.timedelta.'
                 raise TypeError(msg)
             
-            #Handle any datetime-slices
+            # Handle any datetime-slices
             if isinstance(start, datetime.datetime):
                 if stop is None:
                     stop = self.index[-1]
@@ -539,7 +535,7 @@ class DateSeries(object):
             stop = dateindex.stop
             step = dateindex.step
             
-            #Handle start
+            # Handle start
             if start is None:
                 start = 0
             if isinstance(start, str):
@@ -547,7 +543,7 @@ class DateSeries(object):
             if isinstance(start, datetime.datetime):
                 start = np.searchsorted(self.index, start, side='left')
             
-            #Handle stop
+            # Handle stop
             if stop is None:
                 stop = len(self.index)
             if isinstance(stop, str):
@@ -556,7 +552,7 @@ class DateSeries(object):
                 stop = np.searchsorted(self.index, stop, side='right')
             
             if step is not None and not isinstance(step, int):
-                msg  = 'The step given when slicing a DateSeries must '
+                msg = 'The step given when slicing a DateSeries must '
                 msg += 'be of type int or None. Got {} instead.'
                 msg = msg.format(type(step))
                 raise TypeError(msg)
@@ -588,7 +584,8 @@ class DateSeries(object):
         elif isinstance(dateindex, int):
             return self.iloc(dateindex)
         elif isinstance(dateindex, str):
-            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
+            dateindex = datetime.datetime.strptime(dateindex,
+                                                   self.datetime_format)
         if isinstance(dateindex, datetime.datetime):
             return self.loc(dateindex)
         raise TypeError('Unrecognized type.')
@@ -605,7 +602,7 @@ class DateSeries(object):
         if isinstance(dateindex, slice):
             start, stop, step = self.sanitize_slice(dateindex)
             
-            #Loop over the slice
+            # Loop over the slice
             ret = []
             ind = []
             if isinstance(start, int):
@@ -631,7 +628,8 @@ class DateSeries(object):
         elif isinstance(dateindex, int):
             return self.iloc(dateindex)
         elif isinstance(dateindex, str):
-            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
+            dateindex = datetime.datetime.strptime(dateindex,
+                                                   self.datetime_format)
         if isinstance(dateindex, datetime.datetime):
             return self.loc(dateindex)
         raise TypeError('Unrecognized type.')
@@ -660,7 +658,7 @@ class DateSeries(object):
             if isinstance(value, DateSeries):
                 tmp = self[slice(start, stop, step)]
                 for didx in tmp.index:
-                    #Only use values with a compatible index
+                    # Only use values with a compatible index
                     try:
                         self[didx] = value[didx]
                     except (ValueError, IndexError):
@@ -681,12 +679,13 @@ class DateSeries(object):
             self.data[dateindex] = value
             return
         elif isinstance(dateindex, str):
-            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
+            dateindex = datetime.datetime.strptime(dateindex,
+                                                   self.datetime_format)
         if isinstance(dateindex, datetime.datetime):
             if dateindex in self.index:
                 i = self.index.index(dateindex)
             else:
-                raise ValueError('Dateindex {} not in DateSeries.'.format(dateindex))
+                raise ValueError(f'Dateindex {dateindex} not in DateSeries.')
             self.data[i] = value
             return
         raise TypeError('Unrecognized type.')
@@ -712,9 +711,7 @@ class DateSeries(object):
         if isinstance(dateindex, slice):
             start, stop, step = self.sanitize_slice(dateindex)
             
-            #Loop over the slice
-            ret = []
-            ind = []
+            # Loop over the slice
             if isinstance(start, int):
                 if step is None:
                     step = 1
@@ -741,12 +738,13 @@ class DateSeries(object):
             self.data[dateindex] = value
             return
         elif isinstance(dateindex, str):
-            dateindex = datetime.datetime.strptime(dateindex, self.datetime_format)
+            dateindex = datetime.datetime.strptime(dateindex,
+                                                   self.datetime_format)
         if isinstance(dateindex, datetime.datetime):
             if dateindex in self.index:
                 i = self.index.index(dateindex)
             else:
-                raise ValueError('Dateindex {} not in DateSeries.'.format(dateindex))
+                raise ValueError(f'Dateindex {dateindex} not in DateSeries.')
             self.data[i] = value
             return
         raise TypeError('Unrecognized type.')
@@ -857,14 +855,14 @@ class DateSeries(object):
             try:
                 y_float.append(float(y))
                 x_float.append(x)
-            except:
+            except TypeError:
                 pass
         if len(y_float) < 2:
             return fig, ax
         ax.plot(x_float, y_float, **kwargs)
         return fig, ax
     
-    #All math functionality
+    # All math functionality
     def binary_operation(self, other, function_name):
         if isinstance(other, DateSeries):
             index = []
@@ -880,8 +878,8 @@ class DateSeries(object):
         else:
             try:
                 length = len(other)
-            except:
-                #Expecting a scalar value here
+            except TypeError:
+                # Expecting a scalar value here
                 data = []
                 for dat in self.data:
                     func = getattr(dat, function_name)
@@ -958,11 +956,14 @@ class DateSeries(object):
         for val in self.data:
             try:
                 prep_values.append(float(val))
-            except:
+            except TypeError:
                 prep_values.append(val)
-        content = [(np.datetime64(date), val) for (date, val) in zip(prep_index, prep_values)]
-        return np.array(content, dtype=[('dateindex', np.dtype('datetime64[us]')),
-                                        ('data', np.array(prep_values).dtype)])
+        content = [(np.datetime64(date), val)
+                   for (date, val) in zip(prep_index, prep_values)]
+        return np.array(content, dtype=[('dateindex',
+                                         np.dtype('datetime64[us]')),
+                                        ('data',
+                                         np.array(prep_values).dtype)])
     
     def __array__ufunc__(self, ufunc, method, *inputs, **kwargs):
         func = getattr(ufunc, method)
@@ -973,6 +974,7 @@ class DateSeries(object):
             else:
                 return NotImplemented
         return func(*act_inputs, **kwargs)
+
 
 class DateSeriesWrapper(DateSeries):
     def __init__(self, base, **kwargs):

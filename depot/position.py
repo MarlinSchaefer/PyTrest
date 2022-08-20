@@ -150,6 +150,14 @@ class Position(object):
     
     def isShort(self):
         return self.position_type == 'short'
+    
+    def __str__(self):
+        return (f'{self.__class__.__name__}({self.candle_feed.name}, '
+                f'{self.size})')
+    
+    def __repr__(self):
+        return str(self)
+
 
 class EmptyPosition(Position):
     def __init__(self, candle_feed, currency='USD', evaluate_at='low',
