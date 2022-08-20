@@ -30,6 +30,7 @@ Notes
 -event.args[1] is appended, because event.args[0] is self.
 """
 
+
 class Event(object):
     def __init__(self, event_tag, emitter, event_id=0, args=None,
                  kwargs=None):
@@ -38,6 +39,7 @@ class Event(object):
         self.id = event_id
         self.args = args if args is not None else []
         self.kwargs = kwargs if kwargs is not None else {}
+
 
 class EventHandler(object):
     def __init__(self):
@@ -63,8 +65,7 @@ class EventHandler(object):
                               emitter=args[0],
                               event_id=self.events,
                               args=args,
-                              kwargs=kwargs
-                             )
+                              kwargs=kwargs)
                 ret = func(*args, **kwargs)
                 self.handle_event(event)
                 return ret
@@ -85,6 +86,7 @@ class EventHandler(object):
         if func not in self.subscriptions[event_tag]:
             return False
         return True
+
 
 class EventMultiHandler():
     def __init__(self, handlers=None):
@@ -107,8 +109,7 @@ class EventMultiHandler():
                               emitter=args[0],
                               event_id=self.events,
                               args=args,
-                              kwargs=kwargs
-                             )
+                              kwargs=kwargs)
                 ret = func(*args, **kwargs)
                 for handler in self.handlers:
                     handler.handle_event(event)
@@ -123,6 +124,7 @@ class EventMultiHandler():
     def stop_listen(self, event_tag, func):
         for handler in self.handlers:
             handler.stop_listen(event_tag, func)
+
 
 class EventManager(object):
     def send(self, event_tag=None):

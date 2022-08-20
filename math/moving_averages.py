@@ -2,6 +2,7 @@ import warnings
 from ..types.dateseries import DateSeries
 import datetime
 
+
 class EMA(DateSeries):
     def __init__(self, parent, window_size=None, alpha=None, **kwargs):
         if window_size is None and alpha is None:
@@ -21,10 +22,35 @@ class EMA(DateSeries):
             self.alpha = alpha
         self.inv_alpha = 1 - self.alpha
         
-        super().__init__(parent, **kwargs)
+        # index, data = self.initialize_from_parent(parent)
+        index, data = [], []
+        
+        super().__init__(parent, index=index, data=data, **kwargs)
         self.handler.listen('insert_value', self.insert_value_action)
         self.handler.listen('__setitem__', self.setitem_action)
         self.compute_from_index(0)
+        
+    def initialize_from_parent(self, parent):
+        index, data = [], []
+        for i in range(len(parent)):
+            index.append(parent.index[i])
+            if parent.data[i] is None:
+                data.append(None)
+            else:
+                if all([pt is None for pt in data]):
+                    data.append(parent.data[i])
+                    continue
+                curr_data = None
+                j = 1
+                while curr_data is None and j <= i:
+                    curr_data = data[i-j]
+                    j += 1
+                if curr_data is None:
+                    val = None
+                else:
+                    val = self.alpha * parent.data[i] + self.inv_alpha * curr_data  # noqa: E501
+                data.append(val)
+        return index, data
     
     def compute_from_index(self, index):
         if index >= len(self):

@@ -75,7 +75,10 @@ class ConvType(object):
         """
         if not force:
             with open(self.cache_location, 'r') as fp:
-                tmp = json.load(fp)
+                try:
+                    tmp = json.load(fp)
+                except json.decoder.JSONDecodeError:
+                    tmp = {}
             last_written = tmp.get('last_written', None)
             if last_written is not None:
                 last_written = datetime.datetime.strptime(last_written, self.datetime_format)
@@ -385,7 +388,9 @@ class Money(object):
             raise TypeError(msg)
     
     def isnum(self, inp):
-        return isinstance(inp, float) or isinstance(inp, int)
+        isfloat = np.issubdtype(type(inp), np.floating)
+        isint = np.issubdtype(type(inp), np.integer)
+        return isfloat or isint
     
     def __radd__(self, other):
         return self.__add__(other)
@@ -416,7 +421,7 @@ class Money(object):
             return self.copy_new_amount(self.amount / other)
         elif isinstance(other, type(self)):
             o = self.as_own_currency(other)
-            return self.copy_new_amount(self.amount / o.amount)
+            return self.amount / o.amount
         else:
             msg = 'Can divide money only by a number or Money. Got'
             msg += f'{type(other)} instead.'
@@ -486,6 +491,8 @@ class Money(object):
     
     def __eq__(self, other):
         if not isinstance(other, type(self)):
+            if self.isnum(other) and other == 0:
+                return self.amount == 0
             return False
         else:
             o = self.as_own_currency(other)
@@ -502,7 +509,8 @@ class Money(object):
         return self.copy_new_amount(abs(self.amount))
     
     def __str__(self):
-        return str(self.amount) + ' ' + self.currency.upper()
+        return f'{self.amount:.2f} {self.currency.upper()}'
+        # return str(self.amount) + ' ' + self.currency.upper()
     
     def __repr__(self):
         ret = 'Money(' + str(self.amount) + ', currency='

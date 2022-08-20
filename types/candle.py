@@ -286,6 +286,15 @@ class Candle(object):
         ret['data'] = self.data
         return ret
     
+    def __str__(self):
+        ret = (f'{self.__class__.__name__}(open={self.open}, '
+               f'close={self.close}, low={self.low}, high={self.high}, '
+               f'volume=self.vol)')
+        return ret
+    
+    def __repr__(self):
+        return str(self)
+    
     #All math operations
     def binary_operator(self, other, function_name):
         if isinstance(other, type(self)):

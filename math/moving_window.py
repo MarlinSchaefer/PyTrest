@@ -1,7 +1,7 @@
 import numpy as np
-import warnings
 import datetime
 from ..types.dateseries import DateSeries
+
 
 class MovingWindowOperation(DateSeries):
     def __init__(self, parent, min_size=None, max_size=None, **kwargs):
@@ -9,10 +9,25 @@ class MovingWindowOperation(DateSeries):
         self.min_size = min_size
         self.max_size = max_size
         self.set_window_operation()
-        super().__init__(parent, **kwargs)
+        index, data = self.initialize_from_parent(parent)
+        super().__init__(parent, index=index, data=data, **kwargs)
         self.handler.listen('insert_value', self.insert_value_action)
         self.handler.listen('__setitem__', self.setitem_action)
-        self.calculate_windows_from_index(0)
+    
+    def initialize_from_parent(self, parent):
+        index, data = [], []
+        for i in range(len(parent)):
+            curr_dateindex = parent.index[i]
+            index.append(curr_dateindex)
+            if self.min_size is not None and i + 1 < self.min_size:
+                data.append(None)
+            else:
+                stop = i + 1
+                start = 0 if self.max_size is None else max(0, stop - self.max_size)  # noqa: E501
+                window = parent[start:stop].as_list()
+                val = self.window_operation(window)
+                data.append(val)
+        return index, data
     
     def calculate_windows_from_index(self, index):
         if index >= len(self):
@@ -30,7 +45,7 @@ class MovingWindowOperation(DateSeries):
                     self.insert_value(curr_dateindex, value=None)
             else:
                 stop = i + 1
-                start = 0 if self.max_size is None else max(0, stop - self.max_size)
+                start = 0 if self.max_size is None else max(0, stop - self.max_size)  # noqa: E501
                 window = self.parent[start:stop].as_list()
                 val = self.window_operation(window)
                 if curr_dateindex in self:
@@ -49,12 +64,13 @@ class MovingWindowOperation(DateSeries):
             if dateindex is None:
                 dateindex = 0
         if isinstance(dateindex, str):
-            datetime.datetime.strptime(start, self.parent.datetime_format)
+            dateindex = datetime.datetime.strptime(dateindex,
+                                                   self.parent.datetime_format)
         if isinstance(dateindex, datetime.datetime):
             if dateindex in self.parent.index:
                 dateindex = self.parent.index.index(dateindex)
             else:
-                raise ValueError('Dateindex {} not in DateSeries.'.format(dateindex))
+                raise ValueError(f'Dateindex {dateindex} not in DateSeries.')
         if isinstance(dateindex, int):
             self.calculate_windows_from_index(dateindex)
         else:
@@ -77,6 +93,7 @@ class MovingWindowOperation(DateSeries):
                               index=self.index.copy(),
                               datetime_format=self.datetime_format)
 
+
 class SimpleMovingWindow(MovingWindowOperation):
     def __init__(self, parent, window_size=2, **kwargs):
         super().__init__(parent, min_size=window_size,
@@ -89,25 +106,30 @@ class SimpleMovingWindow(MovingWindowOperation):
                               index=self.index.copy(),
                               datetime_format=self.datetime_format)
 
+
 class MovingWindow(SimpleMovingWindow):
     def set_window_operation(self):
         self.window_operation = lambda inp: inp
 
+
 class SMA(SimpleMovingWindow):
     def set_window_operation(self):
-        self.window_operation = lambda window: None if None in window else np.mean(window)
+        self.window_operation = lambda window: None if None in window else np.mean(window)  # noqa: E501
+
 
 class Min(SimpleMovingWindow):
     def set_window_operation(self):
-        self.window_operation = lambda window: None if None in window else np.min(window)
+        self.window_operation = lambda window: None if None in window else np.min(window)  # noqa: E501
+
 
 class Max(SimpleMovingWindow):
     def set_window_operation(self):
-        self.window_operation = lambda window: None if None in window else np.max(window)
+        self.window_operation = lambda window: None if None in window else np.max(window)  # noqa: E501
+
 
 class Std(SimpleMovingWindow):
     def set_window_operation(self):
-        self.window_operation = lambda window: None if None in window else np.std(window)
+        self.window_operation = lambda window: None if None in window else np.std(window)  # noqa: E501
 
 #class MovingTransformationWindow(DateSeries):
     #def __init__(self, base, window_size=2):

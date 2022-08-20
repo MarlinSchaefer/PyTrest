@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from ..types import DateSeries
 
+
 class OptionWrapper(object):
     def __init__(self, dateseries, kwargs):
         self.dateseries = dateseries
@@ -9,8 +10,9 @@ class OptionWrapper(object):
     def plot(self):
         return self.dateseries.plot(**self.kwargs)
 
+
 def plot(args, show=False, store=False, default_orientation='v',
-         legend=False, grid=False):
+         legend=False, grid=False, sharex=False, sharey=False):
     """This function provides an easy to use interface to plot multiple
     DateSeries objects.
     
@@ -40,8 +42,28 @@ def plot(args, show=False, store=False, default_orientation='v',
     
     Arguments
     ---------
+    args : list or DateSeries
+        List of data-sources. See above description for details. See the
+        Examples section for some usage-examples.
     default_orientation : {'v' or 'h', 'v'}
-        If only a list of different 
+        If only a list of different data to plot is given, this argument
+        specifies if the different plots are stacked vertically (v) or
+        horizontally (h).
+    store : {bool or str, False}
+        Whether or not to store the plot. If set to True, it will be stored
+        under `plot.png` in the current working directory. If a string is
+        given, it will be interpreted as path at which to store the plot.
+    show : {bool, False}
+        Whether or not to show the resulting plot using matplotlib.pyplot.show.
+    legend : {bool, False}
+        Show a legend if labels are given to the different data-sources.
+    grid : {bool, False}
+        Plot a grid.
+    sharex : {bool, False}
+        Use a shared x-axis in the different plots.
+    sharey : {bool, False}
+        Use a shared y-axis in the different plots.
+        
     
     Examples
     --------
@@ -162,19 +184,18 @@ def plot(args, show=False, store=False, default_orientation='v',
          #(y)#(z)#
          #########
     """
-    #Handle 0D case
+    # Handle 0D case
     if not isinstance(args, list):
         if isinstance(args, (DateSeries, tuple)):
             args = [[args]]
-        elif isinstance(args, tuple):
-            fig, axs = args[0].plot(**kwargs)
-            msg = 'The argument to `plot` must be either a list '
-            raise TypeError(msg)
+        else:
+            raise TypeError('The argument to `plot` must be either a list or '
+                            'a DateSeries')
     
-    #Handle 1D case or case where the input is only partially 2D
+    # Handle 1D case or case where the input is only partially 2D
     is_list = [isinstance(pt, list) for pt in args]
     if not all(is_list):
-        if any(is_list): #Partially 2D
+        if any(is_list):  # Partially 2D
             tmp = []
             for i, pt in enumerate(args):
                 if is_list[i]:
@@ -190,7 +211,7 @@ def plot(args, show=False, store=False, default_orientation='v',
             else:
                 raise RuntimeError('Bad option')
     
-    #Create 2D array-like structure
+    # Create 2D array-like structure
     max_len = max([len(pt) for pt in args])
     tmp = []
     for pt in args:
@@ -209,9 +230,11 @@ def plot(args, show=False, store=False, default_orientation='v',
     rows = shape[0]
     cols = shape[1]
     
-    #Create figure and axes
+    # Create figure and axes
     fig, axs = plt.subplots(nrows=rows,
-                            ncols=cols)
+                            ncols=cols,
+                            sharex=sharex,
+                            sharey=sharey)
     if rows == 1:
         if cols == 1:
             axs = [[axs]]
@@ -221,8 +244,8 @@ def plot(args, show=False, store=False, default_orientation='v',
         if cols == 1:
             axs = [[pt] for pt in axs]
     
-    #Check if all array-entries are atomic pieces. If so give all of
-    #them basic options.
+    # Check if all array-entries are atomic pieces. If so give all of
+    # them basic options.
     rows_tmp = []
     for i in range(rows):
         cols_tmp = []
@@ -236,8 +259,10 @@ def plot(args, show=False, store=False, default_orientation='v',
                     if len(curr) == 2:
                         if isinstance(curr[0], DateSeries):
                             if isinstance(curr[1], DateSeries):
-                                cols_tmp.append((OptionWrapper(curr[0], base_options),
-                                                OptionWrapper(curr[1], base_options)))
+                                cols_tmp.append((OptionWrapper(curr[0],
+                                                               base_options),
+                                                OptionWrapper(curr[1],
+                                                              base_options)))
                             elif isinstance(curr[1], tuple):
                                 pt1 = OptionWrapper(curr[0], base_options)
                                 obj = curr[1][0]
@@ -285,7 +310,7 @@ def plot(args, show=False, store=False, default_orientation='v',
         rows_tmp.append(cols_tmp)
     args = rows_tmp
     
-    #Do the plotting
+    # Do the plotting
     for i in range(rows):
         for j in range(cols):
             if args[i][j] is not None:
@@ -298,8 +323,8 @@ def plot(args, show=False, store=False, default_orientation='v',
             else:
                 axs[i][j].set_axis_off()
     
-    if not store == False:
-        if store == True:
+    if store is not False:
+        if store is True:
             fig.savefig('plot.png')
         else:
             fig.savefig(store)

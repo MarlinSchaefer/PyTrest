@@ -36,7 +36,7 @@ class Broker(object):
     
     def __contains__(self, item):
         if isinstance(item, dep.Depot):
-            return depot in self.depots
+            return item in self.depots
         elif isinstance(item, CandleFeed):
             return item in list(self.candle_feeds.values())
         elif isinstance(item, BaseOrder):
@@ -286,6 +286,9 @@ class Broker(object):
         if order.isBuyLong():
             exe = depot.pay_broker(cost, msg='Broker: On order execution')
             if not exe:
+                return
+            if not price * quantity <= depot.cash:
+                warnings.warn('Insufficient funds to fulfill buy long order.')
                 return
             depot.increase_position_size(pos, amount=quantity, price=price)
         elif order.isSellLong():
