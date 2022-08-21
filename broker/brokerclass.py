@@ -9,6 +9,7 @@ from . import broker_filling_strategy as bf
 from ..depot import Position
 from .order import BaseOrder
 
+
 """
 Broker commands
 -buy(candle_feed, amount, price=None)
@@ -19,6 +20,7 @@ Broker commands
 -adjust_amount(orderid, amount_diff)
 -
 """
+
 
 class Broker(object):
     def __init__(self, depots=None, active_depot=None, history=None,
@@ -280,15 +282,15 @@ class Broker(object):
         else:
             pos = depot.get_base_position(order.target)
         
-        if not pos in depot:
+        if pos not in depot:
             depot.portfolio.add_position(pos)
         
         if order.isBuyLong():
+            if not price * quantity + cost <= depot.cash:
+                warnings.warn('Insufficient funds to fulfill buy long order.')
+                return
             exe = depot.pay_broker(cost, msg='Broker: On order execution')
             if not exe:
-                return
-            if not price * quantity <= depot.cash:
-                warnings.warn('Insufficient funds to fulfill buy long order.')
                 return
             depot.increase_position_size(pos, amount=quantity, price=price)
         elif order.isSellLong():

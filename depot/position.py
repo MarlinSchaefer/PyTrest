@@ -85,7 +85,7 @@ class Position(object):
             raise RuntimeError
     
     def increase_position_size(self, amount, dateindex=None,
-                             price=None):
+                               price=None):
         if dateindex is None:
             dateindex = self.candle_feed.dateindex
         assert isinstance(amount, int) and amount > 0

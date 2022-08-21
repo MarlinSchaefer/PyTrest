@@ -3,9 +3,9 @@ from .depothistory import DepotHistory
 from ..currency import Money
 from .position import Position
 from .taxes import TaxFree
-import warnings
 import datetime
 import pickle
+
 
 class Depot(object):
     def __init__(self, name='N/A', cash=None, currency=None,
@@ -60,7 +60,7 @@ class Depot(object):
             dateindex = self.dateindex
         cash = Money(cash, currency=self.currency).convert(self.currency)
         self.cash -= cash
-        self.history.cash_event(cash, dateindex,
+        self.history.cash_event(-cash, dateindex,
                                 msg='Depot: Withdrew cash')
     
     def pay_broker(self, cash, dateindex=None, msg=None):
@@ -69,7 +69,7 @@ class Depot(object):
         cash = abs(Money(cash, currency=self.currency).convert(self.currency))
         exe = self.cash >= cash
         self.cash -= min(self.cash, cash)
-        self.history.cash_event(cash, dateindex, msg=msg)
+        self.history.cash_event(-min(self.cash, cash), dateindex, msg=msg)
         return exe
     
     def get_base_position(self, candle_feed):
@@ -91,13 +91,13 @@ class Depot(object):
                                                         amount,
                                                         price=price,
                                                         dateindex=dateindex)
-        taxes = self.tax.on_position_reduce(pos)
-        cash -= taxes
-        self.history.cash_event(taxes, max(pos.history.index),
-                                msg='Depot: Taxes on position reduce')
-        self.cash = self.cash + cash
         self.history.cash_event(cash, max(pos.history.index),
                                 msg='Depot: Cash from position reduce')
+        taxes = self.tax.on_position_reduce(pos)
+        cash -= taxes
+        self.history.cash_event(-taxes, max(pos.history.index),
+                                msg='Depot: Taxes on position reduce')
+        self.cash = self.cash + cash
     
     def increase_position_size(self, position, amount, price=None,
                                dateindex=None):
@@ -105,13 +105,13 @@ class Depot(object):
                                                           amount,
                                                           price=price,
                                                           dateindex=dateindex)
-        taxes = self.tax.on_position_increase(pos)
-        cash -= taxes
-        self.history.cash_event(taxes, max(pos.history.index),
-                                msg='Depot: Taxes on position increase')
-        self.cash = self.cash + cash
         self.history.cash_event(cash, max(pos.history.index),
                                 msg='Depot: Cash from position increase')
+        taxes = self.tax.on_position_increase(pos)
+        cash -= taxes
+        self.history.cash_event(-taxes, max(pos.history.index),
+                                msg='Depot: Taxes on position increase')
+        self.cash = self.cash + cash
     
     def save(self, filepath):
         with open(filepath, 'wb') as fp:

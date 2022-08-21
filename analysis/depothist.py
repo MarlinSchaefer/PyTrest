@@ -75,7 +75,8 @@ def position_value_at(position, date):
     else:
         size = pos_size_evo.data[-1]
     cf = position.candle_feed
-    idx = np.searchsorted(cf.index, date)
+    # idx = np.searchsorted(cf.index, date)
+    idx = max(np.searchsorted(cf.index, date, side='right') - 1, 0)
     price = cf.data[idx].low
     return size * price
 
@@ -126,6 +127,7 @@ def portfolio_value_evolution(portfolio, min_dateindex=None,
                 val += position_value_at(pos, date)
         port_val_evo.insert_value(date, value=val)
     return port_val_evo
+
 
 def depot_value_evolution(depot):
     cash_evo = cash_evolution(depot.history)

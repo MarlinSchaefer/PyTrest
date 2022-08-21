@@ -8,6 +8,7 @@ import warnings
 DEFAULT_CONV_TYPE = 'online'
 CONV_WARN = True
 
+
 class ConvType(object):
     """Class to handle conversion between different currencies.
     
@@ -59,6 +60,20 @@ class ConvType(object):
                     self.cache[old][new] = ds
         except:
             pass
+        self.calculate_cache_range()
+    
+    def calculate_cache_range(self):
+        self.cache_range = {}
+        for src, dstdict in self.cache.items():
+            self.cache_range[src] = {}
+            for dst, dateseries in dstdict.items():
+                cr = {}
+                for i, dateindex in enumerate(dateseries.index):
+                    cdate = dateindex.date()
+                    if cdate not in cr:
+                        cr[cdate] = [i, i]
+                    cr[cdate][1] = i
+                self.cache_range[src][dst] = cr
     
     def write_cache(self, force=False, cache_interval=None):
         """Write the current in-memory cache to disk.
@@ -223,6 +238,7 @@ class ConvType(object):
         self.cache[old_curr][new_curr].updated = date
         
         self.write_cache()
+        self.calculate_cache_range()
     
     def convert_cached(self, mon, new_curr, date=None):
         old = mon.currency
@@ -239,11 +255,22 @@ class ConvType(object):
             date = datetime.datetime.now()
         data = self.cache[old][new_curr]
         
-        diff = [abs(pt - date) for pt in data.index]
-        idx = np.argmin(diff)
+        tmpdate = date.date()
+        tmpcache = self.cache_range[old][new_curr]
+        if tmpdate not in tmpcache:
+            sortdate = list(sorted(tmpcache.keys()))
+            tmpidx = max(np.searchsorted(sortdate,
+                                         tmpdate,
+                                         side='right') - 1,
+                         0)
+            tmpdate = sortdate[tmpidx]
+        low, high = self.cache_range[old][new_curr][tmpdate]
+        idxdat = data.index[low:high+1]
+        idx = max(np.searchsorted(idxdat, date, side='right') - 1 + low,
+                  low)
         
-        if diff[idx] > datetime.timedelta(days=3) and CONV_WARN:
-            warnings.warn(f'Using data that is more than 3 days away from {date}.')
+        # if diff[idx] > datetime.timedelta(days=3) and CONV_WARN:
+        #     warnings.warn(f'Using data that is more than 3 days away from {date}.')
         
         conv_fac = self.cache[old][new_curr].data[idx]
         
@@ -278,6 +305,7 @@ class ConvType(object):
         
         self.cache_data(data, old, new, date)
         self.write_cache(force=True)
+        self.calculate_cache_range()
     
     def download_cache(self, old, new, start_date=None,
                        end_date=None, period=None):
@@ -301,6 +329,7 @@ class ConvType(object):
         
         self.cache_data(data, old, new, date)
         self.write_cache(force=True)
+        self.calculate_cache_range()
         
 DEFAULT_CONV = ConvType()
 
